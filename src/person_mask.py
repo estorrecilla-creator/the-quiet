@@ -52,3 +52,17 @@ def extract_person_cutout(cover_path: str, min_fraction: float = 0.01):
     tmp.close()
     io.imsave(tmp.name, rgba, check_contrast=False)
     return tmp.name
+
+
+def blank_rgba_like(image_path: str) -> str:
+    """PNG RGBA totalmente transparente, con el mismo tamaño que `image_path`.
+    Se usa para las imágenes de una portada múltiple donde no se detectó
+    ninguna persona, para poder concatenarlas junto a las que sí tienen."""
+    img = io.imread(image_path)
+    h, w = img.shape[:2]
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".png", prefix="blank_", delete=False)
+    tmp.close()
+    io.imsave(tmp.name, rgba, check_contrast=False)
+    return tmp.name

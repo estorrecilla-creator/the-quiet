@@ -2,7 +2,8 @@
 video_generator.py
 Genera el vídeo largo (para YouTube normal) a partir de:
   - un audio (mp3/wav)
-  - una imagen de portada (jpg/png)
+  - una o varias imágenes de portada (jpg/png). Con varias, cada una recibe
+    su propio movimiento de cámara (zoom/paneo) y se encadenan en el tiempo.
 
 Usa el filtro nativo de ffmpeg `showwaves`/`avectorscope` mezclado sobre la
 portada, sin depender de moviepy para esta parte (ffmpeg puro es mucho más
@@ -16,18 +17,26 @@ import os
 import subprocess
 from pathlib import Path
 
+import soundfile as sf
+
 from src.ffmpeg_utils import escape_path
 from src.star_light import build_star_script, STAR_SIZE
 from src.lyrics import srt_to_ass, subtitles_filter_fragment
-from src.person_mask import extract_person_cutout
+from src.person_mask import extract_person_cutout, blank_rgba_like
+from src.cover_sequence import build_cover_sequence_filter
 
 STAR_FPS = 12
 GLOW_ASSET = str(Path(__file__).resolve().parent.parent / "assets" / "glow.png")
 
 
+def _get_audio_duration(audio_path: str) -> float:
+    info = sf.info(audio_path)
+    return info.frames / info.samplerate
+
+
 def generate_main_video(
     audio_path: str,
-    cover_path: str,
+    cover_path,
     output_path: str,
     resolution: str = "1920x1080",
     waveform_color: str = "0xE0B0FF",
@@ -38,43 +47,100 @@ def generate_main_video(
     lyrics_path: str = None,
 ):
     """
-    Genera un vídeo horizontal (YouTube) con portada + zoom lento (Ken Burns)
-    + un pequeño punto de luz que recorre despacio los contornos reales de
-    la portada, variando su intensidad con la energía del audio (es la
-    única parte que "reacciona" al ritmo) + waveform fina, discreta y lenta
-    (para un resultado relajante, no nervioso). Si se pasa `lyrics_path`
-    (.srt con los tiempos de la letra), se superpone sincronizada.
+    Genera un vídeo horizontal (YouTube). `cover_path` puede ser una sola
+    ruta de imagen, o una lista de rutas: con varias, el vídeo se reparte a
+    partes iguales entre ellas, cada una con su propio movimiento de cámara
+    (zoom in/out, paneo), en vez de una portada fija.
+
+    Encima va un pequeño punto de luz que recorre despacio los contornos
+    reales de la primera portada, variando su intensidad con la energía del
+    audio (es la única parte que "reacciona" al ritmo) — pasa por detrás de
+    la persona detectada en cada imagen (si la hay) y por delante del resto
+    + waveform fina, discreta y lenta (para un resultado relajante). Si se
+    pasa `lyrics_path` (.srt con los tiempos de la letra), se superpone
+    sincronizada.
     """
     w, h = map(int, resolution.split("x"))
     wave_h = int(h * waveform_height_ratio)
 
-    star_script = build_star_script(audio_path, cover_path, w, h, fps=STAR_FPS)
+    covers = list(cover_path) if isinstance(cover_path, (list, tuple)) else [cover_path]
+
+    star_script = build_star_script(audio_path, covers[0], w, h, fps=STAR_FPS)
     ass_path = None
-    person_cutout = extract_person_cutout(cover_path)
+    person_cutouts = None
     try:
         star_path_arg = escape_path(star_script)
 
-        zoom_chain = (
-            f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
-            f"scale=3840:2160,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,setsar=1"
-        )
+        input_args = ["-i", audio_path]
+        idx = 1
+
+        if len(covers) == 1:
+            zoom_chain = (
+                f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+                f"scale=3840:2160,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,setsar=1"
+            )
+            input_args += ["-loop", "1", "-i", covers[0]]
+            cover_filter = f"[{idx}:v]{zoom_chain}[cover]"
+            idx += 1
+        else:
+            duration = _get_audio_duration(audio_path)
+            seg_duration = duration / len(covers)
+            durations = [seg_duration] * len(covers)
+            for img in covers:
+                input_args += ["-loop", "1", "-t", f"{seg_duration:.3f}", "-i", img]
+            cover_filter = build_cover_sequence_filter(
+                len(covers), durations, w, h, 25, input_offset=idx, out_label="cover"
+            )
+            idx += len(covers)
+
+        glow_idx = idx
+        input_args += ["-loop", "1", "-i", GLOW_ASSET]
+        idx += 1
 
         filter_complex = (
             f"[0:a]showwaves=s={w}x{wave_h}:mode=cline:colors={waveform_color}:rate={waveform_rate},"
             f"format=rgba,colorchannelmixer=aa=0.5[wave];"
-            f"[1:v]{zoom_chain},sendcmd=f='{star_path_arg}'[cover];"
-            f"[2:v]scale={STAR_SIZE}:{STAR_SIZE},format=rgba,sendcmd=f='{star_path_arg}',"
+            f"{cover_filter};"
+            f"[cover]sendcmd=f='{star_path_arg}'[coverstim];"
+            f"[{glow_idx}:v]scale={STAR_SIZE}:{STAR_SIZE},format=rgba,sendcmd=f='{star_path_arg}',"
             f"colorchannelmixer=aa=0.5[star];"
-            f"[cover][star]overlay=x=0:y=0[coverstar]"
+            f"[coverstim][star]overlay=x=0:y=0[coverstar]"
         )
 
+        raw_cutouts = [extract_person_cutout(img) for img in covers]
         base_label = "coverstar"
-        if person_cutout:
+        if any(c is not None for c in raw_cutouts):
+            person_cutouts = [c if c else blank_rgba_like(img) for c, img in zip(raw_cutouts, covers)]
+
+            person_idx = idx
+            for cutout in person_cutouts:
+                if len(covers) == 1:
+                    input_args += ["-loop", "1", "-i", cutout]
+                else:
+                    input_args += ["-loop", "1", "-t", f"{seg_duration:.3f}", "-i", cutout]
+            idx += len(person_cutouts)
+
+            if len(covers) == 1:
+                person_zoom_chain = (
+                    f"format=rgba,scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+                    f"scale=3840:2160,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,setsar=1"
+                )
+                person_filter = f"[{person_idx}:v]{person_zoom_chain}[personcutout]"
+            else:
+                person_filter = build_cover_sequence_filter(
+                    len(person_cutouts), durations, w, h, 25,
+                    input_offset=person_idx, out_label="personcutout",
+                )
+
             filter_complex += (
-                f";[3:v]format=rgba,{zoom_chain}[personcutout];"
+                f";{person_filter};"
                 f"[coverstar][personcutout]overlay=x=0:y=0[coverstarperson]"
             )
             base_label = "coverstarperson"
+        else:
+            for c in raw_cutouts:
+                if c:
+                    os.remove(c)
 
         filter_complex += f";[{base_label}][wave]overlay=0:{h - wave_h}:shortest=1[outv0]"
 
@@ -87,15 +153,7 @@ def generate_main_video(
         else:
             filter_complex = filter_complex.replace("[outv0]", "[outv]")
 
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", audio_path,
-            "-loop", "1", "-i", cover_path,
-            "-loop", "1", "-i", GLOW_ASSET,
-        ]
-        if person_cutout:
-            cmd += ["-loop", "1", "-i", person_cutout]
-        cmd += [
+        cmd = ["ffmpeg", "-y"] + input_args + [
             "-filter_complex", filter_complex,
             "-map", "[outv]", "-map", "0:a",
             "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
@@ -111,8 +169,9 @@ def generate_main_video(
         os.remove(star_script)
         if ass_path:
             os.remove(ass_path)
-        if person_cutout:
-            os.remove(person_cutout)
+        if person_cutouts:
+            for c in person_cutouts:
+                os.remove(c)
 
 
 if __name__ == "__main__":

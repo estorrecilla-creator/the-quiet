@@ -26,10 +26,32 @@ from src.shorts_generator import generate_short
 from src.metadata_generator import generate_metadata
 from src.lyrics_align import resolve_lyrics_srt
 
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+
+
+def resolve_cover(cover_arg):
+    """
+    Si `cover_arg` es una carpeta, devuelve la lista ordenada de imágenes
+    que contiene (cada una tendrá su propio movimiento de cámara en el
+    vídeo principal). Si es un archivo, lo devuelve tal cual.
+    """
+    path = Path(cover_arg)
+    if path.is_dir():
+        images = sorted(
+            p for p in path.iterdir() if p.suffix.lower() in IMAGE_EXTENSIONS
+        )
+        if not images:
+            raise ValueError(f"La carpeta {cover_arg} no contiene imágenes (.jpg/.png).")
+        return [str(p) for p in images]
+    return cover_arg
+
 
 def process_track(audio_path, cover_path, artist, title, genre, context, n_shorts, out_dir, lyrics_path=None):
     out_dir = Path(out_dir) / title.replace(" ", "_")
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    cover = resolve_cover(cover_path)
+    cover_for_shorts = cover[0] if isinstance(cover, list) else cover
 
     print(f"\n=== Procesando: {title} ===")
 
@@ -41,7 +63,7 @@ def process_track(audio_path, cover_path, artist, title, genre, context, n_short
         # 1. Vídeo principal
         print("-> Generando vídeo principal...")
         main_video_path = out_dir / "main_video.mp4"
-        generate_main_video(audio_path, cover_path, str(main_video_path), lyrics_path=lyrics_srt)
+        generate_main_video(audio_path, cover, str(main_video_path), lyrics_path=lyrics_srt)
 
         print("-> Generando metadatos del vídeo principal...")
         main_meta = generate_metadata(artist, title, genre, context, content_type="main")
@@ -56,7 +78,7 @@ def process_track(audio_path, cover_path, artist, title, genre, context, n_short
             print(f"-> Generando Short {i} ({moment['start']:.1f}s - {moment['end']:.1f}s)...")
             short_path = out_dir / f"short_{i}.mp4"
             generate_short(
-                audio_path, cover_path, str(short_path), moment["start"], moment["end"],
+                audio_path, cover_for_shorts, str(short_path), moment["start"], moment["end"],
                 lyrics_path=lyrics_srt,
             )
 
@@ -75,7 +97,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--audio", help="Ruta a un único archivo de audio")
     parser.add_argument("--album-dir", help="Carpeta con varias pistas para procesar como LP")
-    parser.add_argument("--cover", required=True, help="Ruta a la imagen de portada")
+    parser.add_argument(
+        "--cover",
+        required=True,
+        help=(
+            "Ruta a la imagen de portada, o a una carpeta con varias "
+            "imágenes (cada una tendrá su propio movimiento de cámara "
+            "en el vídeo principal)"
+        ),
+    )
     parser.add_argument("--artist", required=True)
     parser.add_argument("--title", help="Título del tema (obligatorio si usas --audio)")
     parser.add_argument("--genre", required=True)

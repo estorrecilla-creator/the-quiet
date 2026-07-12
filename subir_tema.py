@@ -59,7 +59,10 @@ def main():
     print("=== Telvorn Automation — asistente ===\n")
 
     audio = ask_path("Ruta al audio (mp3/wav)")
-    cover = ask_path("Ruta a la portada (jpg/png)")
+    cover = ask_path(
+        "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
+        "(cada una tendrá su propio movimiento de cámara)"
+    )
     artist = ask("Artista")
     title = ask("Título del tema")
     genre = ask("Género/estilo")
