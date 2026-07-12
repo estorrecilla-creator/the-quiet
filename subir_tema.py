@@ -27,10 +27,19 @@ if not os.environ.get("ANTHROPIC_API_KEY"):
 from main import process_track
 
 
+def _strip_quotes(value):
+    # Al arrastrar un archivo a la terminal (sobre todo en Windows), la ruta
+    # llega envuelta en comillas: "C:\ruta\archivo.mp3".
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
 def ask(prompt, default=None, required=True):
     suffix = f" [{default}]" if default else ""
     while True:
-        value = input(f"{prompt}{suffix}: ").strip() or default
+        raw = input(f"{prompt}{suffix}: ").strip()
+        value = _strip_quotes(raw) if raw else default
         if value or not required:
             return value
         print("  Este dato es obligatorio.")
