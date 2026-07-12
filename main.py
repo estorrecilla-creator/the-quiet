@@ -24,6 +24,7 @@ from src.audio_analysis import find_best_moments
 from src.video_generator import generate_main_video
 from src.shorts_generator import generate_short
 from src.metadata_generator import generate_metadata
+from src.lyrics_align import resolve_lyrics_srt
 
 
 def process_track(audio_path, cover_path, artist, title, genre, context, n_shorts, out_dir, lyrics_path=None):
@@ -32,10 +33,18 @@ def process_track(audio_path, cover_path, artist, title, genre, context, n_short
 
     print(f"\n=== Procesando: {title} ===")
 
+    if lyrics_path and lyrics_path.lower().endswith(".txt"):
+        print("-> Sincronizando la letra con el audio (puede tardar unos minutos)...")
+    lyrics_srt, lyrics_is_temp = resolve_lyrics_srt(audio_path, lyrics_path)
+
     # 1. Vídeo principal
     print("-> Generando vídeo principal...")
     main_video_path = out_dir / "main_video.mp4"
-    generate_main_video(audio_path, cover_path, str(main_video_path), lyrics_path=lyrics_path)
+    try:
+        generate_main_video(audio_path, cover_path, str(main_video_path), lyrics_path=lyrics_srt)
+    finally:
+        if lyrics_is_temp:
+            os.remove(lyrics_srt)
 
     print("-> Generando metadatos del vídeo principal...")
     main_meta = generate_metadata(artist, title, genre, context, content_type="main")
@@ -72,7 +81,11 @@ def main():
     parser.add_argument("--out", default="output", help="Carpeta de salida")
     parser.add_argument(
         "--lyrics",
-        help="Ruta a un archivo .srt con la letra sincronizada, para superponerla en el vídeo principal",
+        help=(
+            "Letra para superponer en el vídeo principal: un .srt ya "
+            "sincronizado, o un .txt en texto plano (una frase por línea) "
+            "para sincronizarlo automáticamente contra el audio"
+        ),
     )
     args = parser.parse_args()
 

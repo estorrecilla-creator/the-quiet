@@ -3,5 +3,6 @@ numpy
 soundfile
 anthropic
 python-dotenv
+faster-whisper
 google-auth-oauthlib
 google-api-python-client

@@ -66,7 +66,9 @@ def main():
     context = ask("Contexto/concepto del tema")
     shorts = int(ask("Número de Shorts a generar", "3"))
     lyrics = ask_path(
-        "Ruta a la letra sincronizada (.srt, opcional, Enter para omitir)", required=False
+        "Ruta a la letra (.srt ya sincronizado, o .txt en texto plano para "
+        "sincronizar automáticamente; opcional, Enter para omitir)",
+        required=False,
     )
 
     out_dir = process_track(
