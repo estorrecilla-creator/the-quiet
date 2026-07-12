@@ -18,7 +18,7 @@ from pathlib import Path
 
 from src.ffmpeg_utils import escape_path
 from src.star_light import build_star_script, STAR_SIZE
-from src.lyrics import subtitles_filter_fragment
+from src.lyrics import srt_to_ass, subtitles_filter_fragment
 
 STAR_FPS = 12
 GLOW_ASSET = str(Path(__file__).resolve().parent.parent / "assets" / "glow.png")
@@ -64,10 +64,12 @@ def generate_main_video(
             f"[coverstar][wave]overlay=0:{h - wave_h}:shortest=1[outv0]"
         )
 
+        ass_path = None
         if lyrics_path:
-            margin_v = wave_h + 40
+            margin_v = wave_h + 12
+            ass_path = srt_to_ass(lyrics_path, w, h, margin_v)
             filter_complex += (
-                f";[outv0]{subtitles_filter_fragment(lyrics_path, margin_v)}[outv]"
+                f";[outv0]{subtitles_filter_fragment(ass_path)}[outv]"
             )
         else:
             filter_complex = filter_complex.replace("[outv0]", "[outv]")
@@ -90,6 +92,8 @@ def generate_main_video(
         return output_path
     finally:
         os.remove(star_script)
+        if ass_path:
+            os.remove(ass_path)
 
 
 if __name__ == "__main__":
