@@ -16,6 +16,10 @@ import json
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from src.audio_analysis import find_best_moments
 from src.video_generator import generate_main_video
 from src.shorts_generator import generate_short
@@ -67,6 +71,12 @@ def main():
     parser.add_argument("--shorts", type=int, default=3, help="Número de shorts a generar por tema")
     parser.add_argument("--out", default="output", help="Carpeta de salida")
     args = parser.parse_args()
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        parser.error(
+            "Falta ANTHROPIC_API_KEY. Copia .env.example a .env y añade tu "
+            "clave (ANTHROPIC_API_KEY=sk-ant-...) antes de ejecutar."
+        )
 
     if args.audio:
         if not args.title:

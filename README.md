@@ -23,13 +23,12 @@ cp .env.example .env
 # edita .env y pon ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Luego carga la variable antes de ejecutar (o usa `python-dotenv`, añádelo si
-quieres que se cargue solo):
-```bash
-export $(cat .env | xargs)
-```
+`main.py` carga `.env` automáticamente (vía `python-dotenv`), así que no hace
+falta exportar nada a mano.
 
 ## Uso — un solo tema
+
+Pon el audio y la portada en `input/` (o donde prefieras) y ejecuta:
 
 ```bash
 python main.py \

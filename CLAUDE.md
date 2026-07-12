@@ -8,19 +8,29 @@ Input: audio (mp3/wav) + portada (jpg/png)
 Output: vídeo largo para YouTube + N Shorts + títulos/descripciones/hashtags,
 todo en carpetas listas para revisión manual antes de subir.
 
-## Estado actual (prototipo funcional, probado con audio sintético)
+## Estado actual (pipeline verificado end-to-end con audio sintético, wav y mp3)
 - `src/audio_analysis.py` — detecta mejores momentos (energía + onsets). FUNCIONA.
 - `src/video_generator.py` — vídeo horizontal con waveform sobre portada. FUNCIONA.
 - `src/shorts_generator.py` — shorts verticales 1080x1920 recortados de los
   mejores momentos, con fade in/out. FUNCIONA.
 - `src/metadata_generator.py` — título/descripción/hashtags vía API de Claude
-  (modelo `claude-sonnet-4-6`). Requiere ANTHROPIC_API_KEY. NO PROBADO EN VIVO
-  (sin API key en el entorno de desarrollo).
+  (modelo `claude-sonnet-5`). Requiere ANTHROPIC_API_KEY. Se corrigió un bug:
+  usaba un model id inválido (`claude-sonnet-4-6`) que habría fallado incluso
+  con API key correcta. Lógica de parseo del JSON verificada con mock; falta
+  confirmación en vivo con una ANTHROPIC_API_KEY real (no disponible en el
+  entorno de desarrollo/sandbox).
 - `src/youtube_uploader.py` — sube en modo PRIVADO vía OAuth. NO PROBADO
   (necesita client_secret.json de Google Cloud Console, no se puede generar
   automáticamente). Salva decidió: de momento NO integrar en el pipeline
   automático, dejar como módulo aparte hasta que se confirme el flujo.
-- `main.py` — orquestador CLI que encadena todo.
+- `main.py` — orquestador CLI que encadena todo. Carga `.env` automáticamente
+  (`python-dotenv`) y falla con un mensaje claro si falta ANTHROPIC_API_KEY,
+  en vez de dejar pasar un traceback críptico.
+
+El pipeline se probó de punta a punta (`process_track` con audio real .wav/.mp3
+sintético + portada) generando vídeo principal, N shorts y JSONs de metadatos
+sin errores. Para uso real solo falta: (1) que el usuario ponga su
+ANTHROPIC_API_KEY real en `.env`, y (2) copiar sus temas + portada a `input/`.
 
 ## Decisiones de diseño ya tomadas (no las cambies sin confirmar con Salva)
 - Estilo de vídeo principal: waveform/visualizador sobre portada (no lyric
@@ -34,7 +44,8 @@ todo en carpetas listas para revisión manual antes de subir.
   suppression para que los momentos no queden pegados unos a otros.
 
 ## Próximos pasos pendientes (backlog)
-1. Probar `metadata_generator.py` con ANTHROPIC_API_KEY real.
+1. Confirmar `metadata_generator.py` con una ANTHROPIC_API_KEY real (lógica
+   ya verificada con mock, solo falta la llamada real de Salva en su máquina).
 2. Añadir plantilla de estilo visual de marca (tipografía/logo del grupo
    superpuesto en los vídeos — actualmente es solo portada + waveform).
 3. Soporte para letras sincronizadas (si el grupo decide hacer lyric videos

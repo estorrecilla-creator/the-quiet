@@ -18,7 +18,7 @@ import os
 import json
 import anthropic
 
-MODEL = "claude-sonnet-4-6"
+MODEL = "claude-sonnet-5"
 
 SYSTEM_PROMPT = """Eres el responsable de marketing musical del proyecto. Generas
 metadatos de YouTube optimizados para descubrimiento (SEO) sin caer en clickbait
