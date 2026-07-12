@@ -36,6 +36,16 @@ Cada vez que tengas un tema nuevo:
 3. Responde las preguntas (artista, título, género, contexto...) y espera.
 4. Revisa el resultado en `output/`.
 
+### Acceso directo de escritorio (Windows, sin usar PowerShell)
+
+Para no tener que abrir PowerShell cada vez:
+
+1. En el Explorador de Windows, entra en la carpeta `the-quiet`.
+2. Clic derecho sobre `subir_tema.bat` → **Enviar a** → **Escritorio (crear acceso directo)**.
+3. A partir de ahora, doble clic en ese icono del escritorio abre una
+   ventana y te va preguntando todo (audio, portada, título, contexto...)
+   igual que si lo ejecutaras a mano, sin tener que escribir comandos.
+
 Eso es todo. El resto de este README explica el uso avanzado por línea de
 comandos (`main.py` con flags), útil si quieres automatizar LPs completos o
 integrarlo en otro script.
