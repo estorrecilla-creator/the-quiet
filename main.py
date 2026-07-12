@@ -25,6 +25,7 @@ from src.video_generator import generate_main_video
 from src.shorts_generator import generate_short
 from src.metadata_generator import generate_metadata
 from src.lyrics_align import resolve_lyrics_srt
+from src.cover_sequence import MOVEMENTS
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
 
@@ -79,6 +80,7 @@ def process_track(audio_path, cover_path, artist, title, genre, context, n_short
             short_path = out_dir / f"short_{i}.mp4"
             generate_short(
                 audio_path, cover_for_shorts, str(short_path), moment["start"], moment["end"],
+                movement=MOVEMENTS[(i - 1) % len(MOVEMENTS)],
                 lyrics_path=lyrics_srt,
             )
 

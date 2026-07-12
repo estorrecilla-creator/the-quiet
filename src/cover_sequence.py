@@ -2,16 +2,21 @@
 cover_sequence.py
 Da vida a una o varias imágenes estáticas de portada con movimiento de
 cámara (zoom in/out, paneo lateral/vertical) usando el filtro zoompan de
-ffmpeg. El movimiento es lineal desde el primer fotograma hasta el último
-(nada de arranques bruscos ni de que "no pase nada" hasta el final) y
-sutil. Con varias imágenes, cada una recibe un tipo de movimiento distinto
-(se van repitiendo en ciclo) y se encadenan con un desvanecimiento hacia
-oscuridad (`xfade` modo `fadeblack`) en vez de un corte seco.
+ffmpeg. El movimiento es lineal desde el primer fotograma hasta el último,
+sutil, y con el progreso siempre limitado a [0,1] (si ffmpeg decodifica
+algún fotograma de más al final de un input recortado con -t, el
+movimiento se queda quieto en su posición final en vez de salirse de la
+imagen — eso es lo que causaba el efecto de "parpadeo"/"aparece y
+desaparece"). Con varias imágenes, cada una recibe un tipo de movimiento
+distinto y se encadenan con una transición que también varía (fundido a
+negro, fundido cruzado, barridos...) en vez de siempre la misma.
 """
 
 MOVEMENTS = ["zoom_in", "zoom_out", "pan_left", "pan_right", "pan_up", "pan_down"]
 
-TRANSITION_DURATION = 1.8  # segundos de desvanecimiento entre imágenes
+TRANSITIONS = ["fadeblack", "fade", "smoothleft", "smoothright", "circleclose", "dissolve"]
+
+TRANSITION_DURATION = 1.8  # segundos de fundido entre imágenes
 
 
 def build_movement_chain(
@@ -25,14 +30,14 @@ def build_movement_chain(
 ) -> str:
     """
     Cadena de filtros (a partir de un input de vídeo/imagen) que aplica un
-    movimiento de cámara lineal y sutil durante `duration` segundos. Se
-    define con una fórmula explícita en función del fotograma actual (no
-    de un valor acumulado), para que el avance sea constante desde el
-    primer fotograma hasta el último.
+    movimiento de cámara lineal y sutil durante `duration` segundos.
     """
     total_frames = max(1, round(duration * fps))
     base = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},scale=3840:2160"
-    progress = f"(on/{total_frames})"
+    # min(...,1): si por redondeo ffmpeg decodifica algún fotograma más de
+    # los calculados, el progreso se queda clavado en 1 en vez de salirse
+    # del rango válido (eso producía el parpadeo).
+    progress = f"min(on/{total_frames}\\,1)"
 
     opts = {"d": "1", "s": f"{w}x{h}", "fps": str(fps)}
 
@@ -63,7 +68,7 @@ def build_movement_chain(
 def compute_segment_durations(total_duration: float, n_images: int, transition: float = TRANSITION_DURATION):
     """
     Duración "en bruto" que debe renderizarse por cada imagen para que,
-    tras encadenarlas con desvanecimientos que se solapan `transition`
+    tras encadenarlas con transiciones que se solapan `transition`
     segundos entre cada dos, el resultado final dure `total_duration`.
     """
     if n_images <= 1:
@@ -87,8 +92,12 @@ def build_cover_sequence_filter(
     """
     Genera el fragmento de filtro que aplica un movimiento distinto a cada
     una de las `n_images` imágenes (inputs de ffmpeg consecutivos empezando
-    en `input_offset`) y las une en un único stream `[out_label]`, con un
-    desvanecimiento hacia oscuridad entre cada dos si `use_transition`.
+    en `input_offset`) y las une en un único stream `[out_label]`, con una
+    transición (tipo distinto cada vez) entre cada dos si `use_transition`.
+    Al final se fija la duración exacta a la suma "objetivo" (sin el
+    solape de las transiciones) con `trim`+`tpad`, para que nunca quede ni
+    un fotograma más corta ni más larga que el audio, evitando el
+    desfase acumulado de la letra en temas con varias imágenes.
     """
     fragments = []
     seg_labels = []
@@ -108,16 +117,26 @@ def build_cover_sequence_filter(
         fragments.append(joined + f"concat=n={n_images}:v=1:a=0[{out_label}]")
         return ";".join(fragments)
 
+    target_duration = sum(durations) - transition * (n_images - 1)
+
     prev = seg_labels[0]
     cumulative = durations[0]
     for i in range(1, n_images):
         offset = max(cumulative - transition, 0)
-        out = out_label if i == n_images - 1 else f"xf{i}_{out_label}"
+        trans_type = TRANSITIONS[(i - 1) % len(TRANSITIONS)]
+        joined_label = f"joined{i}_{out_label}" if i < n_images - 1 else f"{out_label}_raw"
         fragments.append(
-            f"[{prev}][{seg_labels[i]}]xfade=transition=fadeblack:"
-            f"duration={transition}:offset={offset:.3f}[{out}]"
+            f"[{prev}][{seg_labels[i]}]xfade=transition={trans_type}:"
+            f"duration={transition}:offset={offset:.3f}[{joined_label}]"
         )
         cumulative = cumulative + durations[i] - transition
-        prev = out
+        prev = joined_label
+
+    # Fija la duración final exacta (por si el redondeo de las transiciones
+    # deja el vídeo un pelín más corto o más largo de lo previsto).
+    fragments.append(
+        f"[{prev}]trim=duration={target_duration:.3f},setpts=PTS-STARTPTS,"
+        f"tpad=stop_mode=clone:stop_duration={transition * 2:.3f}[{out_label}]"
+    )
 
     return ";".join(fragments)

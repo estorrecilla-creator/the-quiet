@@ -79,7 +79,7 @@ def srt_to_ass(
     width: int,
     height: int,
     margin_v: int,
-    font_size: int = 39,
+    font_size: int = 58,
     offset: float = 0.0,
     duration: float = None,
 ) -> str:

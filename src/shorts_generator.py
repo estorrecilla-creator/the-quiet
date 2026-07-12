@@ -13,6 +13,7 @@ from src.ffmpeg_utils import escape_path
 from src.star_light import build_star_script, STAR_SIZE
 from src.lyrics import srt_to_ass, subtitles_filter_fragment
 from src.person_mask import extract_person_cutout
+from src.cover_sequence import build_movement_chain, MOVEMENTS
 
 STAR_FPS = 12
 GLOW_ASSET = str(Path(__file__).resolve().parent.parent / "assets" / "glow.png")
@@ -27,8 +28,7 @@ def generate_short(
     fade_duration: float = 0.6,
     waveform_color: str = "0xE0B0FF",
     waveform_rate: float = 7,
-    zoom_speed: float = 0.0002,
-    zoom_max: float = 1.15,
+    movement: str = "zoom_in",
     lyrics_path: str = None,
 ):
     duration = end - start
@@ -43,10 +43,7 @@ def generate_short(
     try:
         star_path_arg = escape_path(star_script)
 
-        zoom_chain = (
-            f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
-            f"scale=2160:3840,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,setsar=1"
-        )
+        zoom_chain = build_movement_chain(movement, w, h, duration, fps=25)
 
         filter_complex = (
             f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS,"
