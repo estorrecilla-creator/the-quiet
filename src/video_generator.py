@@ -13,8 +13,6 @@ franja inferior (look estándar de canal de música/lyric-less video).
 """
 
 import subprocess
-import shlex
-import os
 
 
 def generate_main_video(
@@ -40,15 +38,18 @@ def generate_main_video(
         f"[cover][wave]overlay=0:{h - wave_h}:shortest=1[outv]"
     )
 
-    cmd = (
-        f'ffmpeg -y -i {shlex.quote(audio_path)} -loop 1 -i {shlex.quote(cover_path)} '
-        f'-filter_complex "{filter_complex}" '
-        f'-map "[outv]" -map 0:a '
-        f'-c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p '
-        f'-c:a aac -b:a 192k -shortest {shlex.quote(output_path)}'
-    )
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", audio_path,
+        "-loop", "1", "-i", cover_path,
+        "-filter_complex", filter_complex,
+        "-map", "[outv]", "-map", "0:a",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k", "-shortest",
+        output_path,
+    ]
 
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg error:\n{result.stderr[-2000:]}")
     return output_path

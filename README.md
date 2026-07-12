@@ -5,19 +5,34 @@ vídeo principal, Shorts, títulos, descripciones y hashtags.
 
 ## Modo súper simple (recomendado)
 
+Necesitas [Python](https://python.org) instalado (marca "Add to PATH" durante
+la instalación si estás en Windows) y **ffmpeg**:
+- Mac: `brew install ffmpeg`
+- Windows: `winget install ffmpeg` (o descarga desde ffmpeg.org y añádelo al PATH)
+- Linux: `sudo apt install ffmpeg`
+
 Una sola vez:
+
+**Mac / Linux:**
 ```bash
 cd the-quiet
 ./setup.sh
 ```
-Te instalará todo y creará `.env` — ábrelo y pon tu `ANTHROPIC_API_KEY`.
+
+**Windows (PowerShell):**
+```powershell
+cd the-quiet
+powershell -ExecutionPolicy Bypass -File .\setup.ps1
+```
+
+Te instalará todo y creará `.env` — ábrelo con el Bloc de notas y pon tu
+`ANTHROPIC_API_KEY`.
 
 Cada vez que tengas un tema nuevo:
 1. Copia el audio y la portada a `input/`.
 2. Ejecuta:
-   ```bash
-   venv/bin/python subir_tema.py
-   ```
+   - Mac/Linux: `venv/bin/python subir_tema.py`
+   - Windows: `.\venv\Scripts\python.exe subir_tema.py`
 3. Responde las preguntas (artista, título, género, contexto...) y espera.
 4. Revisa el resultado en `output/`.
 
