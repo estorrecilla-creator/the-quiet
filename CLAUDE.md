@@ -26,11 +26,26 @@ todo en carpetas listas para revisión manual antes de subir.
 - `main.py` — orquestador CLI que encadena todo. Carga `.env` automáticamente
   (`python-dotenv`) y falla con un mensaje claro si falta ANTHROPIC_API_KEY,
   en vez de dejar pasar un traceback críptico.
+- `subir_tema.py` — asistente interactivo por terminal (pregunta ruta de
+  audio/portada, artista, título, género, contexto, nº de shorts) que llama
+  a `process_track()` de `main.py`. Pensado para que Salva no tenga que
+  recordar flags de CLI.
+- `setup.sh` — instalación de un solo comando (venv + deps + crea `.env`).
+- `webapp.py` + `templates/` — interfaz web (Flask) para generar contenido
+  desde el navegador (incluido Safari en iPhone) sin terminal: formulario de
+  subida (audio + portada + campos), job en background con hilo, página de
+  estado con auto-refresh, descarga de resultados. Protegida por contraseña
+  opcional (`APP_PASSWORD`) vía sesión. Probada end-to-end con el test client
+  de Flask (login, subida, polling de estado, descarga) usando metadatos
+  simulados. `Dockerfile` + `render.yaml` listos para desplegar en Render.com
+  (`requirements-web.txt` añade flask/gunicorn sobre `requirements.txt`).
 
 El pipeline se probó de punta a punta (`process_track` con audio real .wav/.mp3
 sintético + portada) generando vídeo principal, N shorts y JSONs de metadatos
-sin errores. Para uso real solo falta: (1) que el usuario ponga su
-ANTHROPIC_API_KEY real en `.env`, y (2) copiar sus temas + portada a `input/`.
+sin errores, tanto por CLI (`main.py`/`subir_tema.py`) como vía la webapp.
+Para uso real solo falta: (1) que el usuario ponga su ANTHROPIC_API_KEY real
+en `.env` (CLI) o como variable de entorno del servicio desplegado (web), y
+(2) copiar sus temas + portada a `input/` o subirlos por el formulario web.
 
 ## Decisiones de diseño ya tomadas (no las cambies sin confirmar con Salva)
 - Estilo de vídeo principal: waveform/visualizador sobre portada (no lyric

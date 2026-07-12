@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: telvorn-automation
+    env: docker
+    plan: starter
+    healthCheckPath: /login
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: FLASK_SECRET_KEY
+        generateValue: true

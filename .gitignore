@@ -3,6 +3,7 @@ venv/
 config/client_secret.json
 config/token.json
 output/
+uploads/
 input/*
 !input/.gitkeep
 __pycache__/

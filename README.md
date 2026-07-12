@@ -98,6 +98,51 @@ Cuando queráis activar la subida directa a YouTube:
 3. Cuando confíes en el pipeline, añade la llamada a `upload_video()` al
    final de `process_track()` en `main.py`.
 
+## Web app / uso desde el móvil (iPhone incluido)
+
+Hay una interfaz web (`webapp.py`) para generar contenido desde el navegador
+(Safari en iPhone funciona bien) sin usar la terminal: subes audio + portada,
+rellenas artista/título/género/contexto, y descargas los vídeos y metadatos
+cuando terminan.
+
+**Importante:** esto es software local que corre `ffmpeg`, no puede vivir
+"en tu iPhone" como una app nativa. Lo que sí puedes hacer es desplegarlo en
+un servidor (gratis o muy barato) y entrar a él desde el navegador del móvil.
+
+### Probarlo en tu ordenador primero
+
+```bash
+./setup.sh                       # si no lo has hecho ya
+venv/bin/pip install -r requirements-web.txt
+export APP_PASSWORD=algo-secreto  # protege el acceso, si no nadie más podría usar tu API key
+venv/bin/python webapp.py
+```
+Abre `http://localhost:5000` en el navegador.
+
+### Desplegarlo para usarlo desde el iPhone (Render.com)
+
+1. Ve a [render.com](https://render.com) y crea una cuenta (gratis).
+2. "New" → "Web Service" → conecta tu cuenta de GitHub → elige el repo
+   `the-quiet`. Render detecta el `render.yaml` y el `Dockerfile` solo.
+3. Cuando te pida las variables de entorno, añade:
+   - `ANTHROPIC_API_KEY` = tu clave de Anthropic
+   - `APP_PASSWORD` = una contraseña que te inventes (para que no sea público)
+4. Despliega. Te da una URL tipo `https://telvorn-automation.onrender.com`.
+5. En el iPhone, abre esa URL en Safari → botón compartir → **"Añadir a
+   pantalla de inicio"**. Te queda como un icono más, se abre a pantalla
+   completa.
+
+Notas:
+- El plan gratuito de Render "duerme" el servicio si no lo usas — la primera
+  carga tras un tiempo sin actividad puede tardar ~30s en arrancar.
+- Generar un vídeo real (audio de varios minutos + varios Shorts) puede
+  tardar unos minutos; la página de estado se actualiza sola cada 5s.
+- Los archivos generados no son permanentes en el plan gratuito (el disco es
+  efímero): descárgalos en cuanto estén listos, no los dejes ahí.
+- Para que la sesión de login no se cierre en cada redeploy, fija también
+  `FLASK_SECRET_KEY` a un valor tuyo (si no, Render genera uno al desplegar,
+  lo cual también vale).
+
 ## Continuar el desarrollo con Claude Code
 
 Este proyecto incluye `CLAUDE.md` con el contexto completo del estado actual

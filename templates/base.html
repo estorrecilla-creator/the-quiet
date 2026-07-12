@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Telvorn Automation{% endblock %}</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    max-width: 480px; margin: 0 auto; padding: 1.5rem 1rem 3rem; line-height: 1.4;
+  }
+  h1 { font-size: 1.3rem; }
+  label { display: block; margin-top: 1rem; font-weight: 600; font-size: 0.9rem; }
+  input[type=text], input[type=password], input[type=number], textarea {
+    width: 100%; padding: 0.6rem; margin-top: 0.3rem; box-sizing: border-box;
+    border: 1px solid #8888; border-radius: 8px; font-size: 1rem;
+    background: transparent; color: inherit;
+  }
+  input[type=file] { margin-top: 0.3rem; width: 100%; }
+  button {
+    margin-top: 1.5rem; width: 100%; padding: 0.8rem; font-size: 1rem;
+    border: none; border-radius: 10px; background: #6b3fa0; color: white; font-weight: 600;
+  }
+  button:active { opacity: 0.85; }
+  .msg { background: #ffcc0033; border: 1px solid #cc9900; padding: 0.6rem 0.8rem; border-radius: 8px; margin-top: 1rem; font-size: 0.9rem; }
+  .err { background: #ff333322; border-color: #cc3333; }
+  ul.files { list-style: none; padding: 0; }
+  ul.files li { margin: 0.4rem 0; }
+  ul.files a { display: block; padding: 0.6rem; background: #8882; border-radius: 8px; text-decoration: none; color: inherit; }
+  .status { font-size: 0.9rem; opacity: 0.8; }
+  a.logout { float: right; font-size: 0.8rem; color: inherit; }
+</style>
+</head>
+<body>
+  {% if session.get('authed') %}<a class="logout" href="{{ url_for('logout') }}">salir</a>{% endif %}
+  <h1>Telvorn Automation</h1>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for m in messages %}<div class="msg err">{{ m }}</div>{% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ job.title }}</h2>
+{% if job.status in ["queued", "processing"] %}
+  <p class="status">Estado: generando… esto puede tardar varios minutos.</p>
+  <meta http-equiv="refresh" content="5">
+{% elif job.status == "done" %}
+  <p class="status">Listo.</p>
+  <ul class="files">
+    {% for f in job.files %}
+    <li><a href="{{ url_for('descargar', job_id=job_id, filename=f) }}">{{ f }}</a></li>
+    {% endfor %}
+  </ul>
+  <p><a href="{{ url_for('index') }}">← Generar otro tema</a></p>
+{% elif job.status == "error" %}
+  <div class="msg err">Error: {{ job.error }}</div>
+  <p><a href="{{ url_for('index') }}">← Volver</a></p>
+{% endif %}
+{% endblock %}

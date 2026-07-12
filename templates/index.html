@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+{% if not api_key_set %}
+<div class="msg err">Falta ANTHROPIC_API_KEY en el servidor. Configúrala como variable de entorno antes de generar contenido.</div>
+{% endif %}
+<form method="post" action="{{ url_for('generar') }}" enctype="multipart/form-data">
+  <label>Audio (mp3/wav)</label>
+  <input type="file" name="audio" accept="audio/mpeg,audio/wav,.mp3,.wav" required>
+
+  <label>Portada (jpg/png)</label>
+  <input type="file" name="cover" accept="image/jpeg,image/png" required>
+
+  <label>Artista</label>
+  <input type="text" name="artist" required>
+
+  <label>Título del tema</label>
+  <input type="text" name="title" required>
+
+  <label>Género/estilo</label>
+  <input type="text" name="genre" required>
+
+  <label>Contexto/concepto</label>
+  <textarea name="context" rows="3" required></textarea>
+
+  <label>Número de Shorts</label>
+  <input type="number" name="shorts" value="3" min="0" max="10">
+
+  <button type="submit">Generar</button>
+</form>
+{% endblock %}
