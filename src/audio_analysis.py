@@ -79,6 +79,30 @@ def find_best_moments(
     return selected
 
 
+def energy_envelope(
+    audio_path: str,
+    fps: float = 12.0,
+    sr: int = 22050,
+    offset: float = 0.0,
+    duration: float = None,
+):
+    """
+    Devuelve la energía RMS normalizada (0..1) del audio, muestreada a `fps`
+    puntos por segundo. Se usa para sincronizar efectos visuales (pulso de
+    brillo/color) con la música real, en vez de una animación genérica.
+    """
+    y, sr = librosa.load(audio_path, sr=sr, mono=True, offset=offset, duration=duration)
+    if len(y) == 0:
+        return [0.0]
+
+    hop_length = max(1, int(sr / fps))
+    rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
+    peak = float(rms.max())
+    if peak < 1e-9:
+        return [0.0] * len(rms)
+    return (rms / peak).tolist()
+
+
 if __name__ == "__main__":
     import sys
     import json

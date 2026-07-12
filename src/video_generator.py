@@ -12,7 +12,12 @@ Estilo: portada de fondo + barra de forma de onda semitransparente en la
 franja inferior (look estándar de canal de música/lyric-less video).
 """
 
+import os
 import subprocess
+
+from src.pulse import build_pulse_script, ffmpeg_filter_path
+
+PULSE_FPS = 12
 
 
 def generate_main_video(
@@ -27,35 +32,44 @@ def generate_main_video(
 ):
     """
     Genera un vídeo horizontal (YouTube) con portada + zoom lento (Ken Burns)
-    + waveform semitransparente y fina en la franja inferior.
+    + un pulso de brillo/saturación sincronizado con la energía real del
+    audio (la portada "respira" con la música) + waveform fina y discreta.
     """
     w, h = map(int, resolution.split("x"))
     wave_h = int(h * waveform_height_ratio)
 
-    filter_complex = (
-        f"[0:a]showwaves=s={w}x{wave_h}:mode=cline:colors={waveform_color}:rate=25,"
-        f"format=rgba,colorchannelmixer=aa=0.5[wave];"
-        f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
-        f"scale=3840:2160,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,"
-        f"setsar=1[cover];"
-        f"[cover][wave]overlay=0:{h - wave_h}:shortest=1[outv]"
-    )
+    pulse_script = build_pulse_script(audio_path, fps=PULSE_FPS)
+    try:
+        pulse_path = ffmpeg_filter_path(pulse_script)
 
-    cmd = [
-        "ffmpeg", "-y",
-        "-i", audio_path,
-        "-loop", "1", "-i", cover_path,
-        "-filter_complex", filter_complex,
-        "-map", "[outv]", "-map", "0:a",
-        "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "192k", "-shortest",
-        output_path,
-    ]
+        filter_complex = (
+            f"[0:a]showwaves=s={w}x{wave_h}:mode=cline:colors={waveform_color}:rate=25,"
+            f"format=rgba,colorchannelmixer=aa=0.5[wave];"
+            f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+            f"scale=3840:2160,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,"
+            f"setsar=1,"
+            f"sendcmd=f='{pulse_path}',"
+            f"eq=brightness=0:saturation=1[cover];"
+            f"[cover][wave]overlay=0:{h - wave_h}:shortest=1[outv]"
+        )
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg error:\n{result.stderr[-2000:]}")
-    return output_path
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", audio_path,
+            "-loop", "1", "-i", cover_path,
+            "-filter_complex", filter_complex,
+            "-map", "[outv]", "-map", "0:a",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "192k", "-shortest",
+            output_path,
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"ffmpeg error:\n{result.stderr[-2000:]}")
+        return output_path
+    finally:
+        os.remove(pulse_script)
 
 
 if __name__ == "__main__":
