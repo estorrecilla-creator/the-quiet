@@ -21,20 +21,23 @@ def generate_main_video(
     output_path: str,
     resolution: str = "1920x1080",
     waveform_color: str = "0xE0B0FF",
-    waveform_height_ratio: float = 0.22,
+    waveform_height_ratio: float = 0.10,
+    zoom_speed: float = 0.0002,
+    zoom_max: float = 1.15,
 ):
     """
-    Genera un vídeo horizontal (YouTube) con portada fija + waveform animado
-    en la franja inferior.
+    Genera un vídeo horizontal (YouTube) con portada + zoom lento (Ken Burns)
+    + waveform semitransparente y fina en la franja inferior.
     """
     w, h = map(int, resolution.split("x"))
     wave_h = int(h * waveform_height_ratio)
 
     filter_complex = (
         f"[0:a]showwaves=s={w}x{wave_h}:mode=cline:colors={waveform_color}:rate=25,"
-        f"format=rgba,colorchannelmixer=aa=0.85[wave];"
-        f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
-        f"crop={w}:{h}[cover];"
+        f"format=rgba,colorchannelmixer=aa=0.5[wave];"
+        f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+        f"scale=3840:2160,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,"
+        f"setsar=1[cover];"
         f"[cover][wave]overlay=0:{h - wave_h}:shortest=1[outv]"
     )
 

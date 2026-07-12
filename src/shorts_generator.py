@@ -16,18 +16,22 @@ def generate_short(
     end: float,
     fade_duration: float = 0.6,
     waveform_color: str = "0xE0B0FF",
+    zoom_speed: float = 0.0002,
+    zoom_max: float = 1.15,
 ):
     duration = end - start
     w, h = 1080, 1920
-    wave_h = int(h * 0.18)
+    wave_h = int(h * 0.09)
 
     filter_complex = (
         f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS,"
         f"afade=t=in:st=0:d={fade_duration},afade=t=out:st={duration - fade_duration}:d={fade_duration}[a0];"
         f"[a0]asplit=2[aout][avis];"
         f"[avis]showwaves=s={w}x{wave_h}:mode=cline:colors={waveform_color}:rate=25,"
-        f"format=rgba,colorchannelmixer=aa=0.85[wave];"
-        f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}[cover];"
+        f"format=rgba,colorchannelmixer=aa=0.5[wave];"
+        f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+        f"scale=2160:3840,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,"
+        f"setsar=1[cover];"
         f"[cover][wave]overlay=0:(H-h)/2:shortest=1[outv]"
     )
 
