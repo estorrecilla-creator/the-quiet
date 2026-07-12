@@ -23,7 +23,7 @@ from src.ffmpeg_utils import escape_path
 from src.star_light import build_star_script, STAR_SIZE
 from src.lyrics import srt_to_ass, subtitles_filter_fragment
 from src.person_mask import extract_person_cutout, blank_rgba_like
-from src.cover_sequence import build_cover_sequence_filter
+from src.cover_sequence import build_cover_sequence_filter, compute_segment_durations
 
 STAR_FPS = 12
 GLOW_ASSET = str(Path(__file__).resolve().parent.parent / "assets" / "glow.png")
@@ -83,11 +83,10 @@ def generate_main_video(
             cover_filter = f"[{idx}:v]{zoom_chain}[cover]"
             idx += 1
         else:
-            duration = _get_audio_duration(audio_path)
-            seg_duration = duration / len(covers)
-            durations = [seg_duration] * len(covers)
-            for img in covers:
-                input_args += ["-loop", "1", "-t", f"{seg_duration:.3f}", "-i", img]
+            total_duration = _get_audio_duration(audio_path)
+            durations = compute_segment_durations(total_duration, len(covers))
+            for img, dur in zip(covers, durations):
+                input_args += ["-loop", "1", "-t", f"{dur:.3f}", "-i", img]
             cover_filter = build_cover_sequence_filter(
                 len(covers), durations, w, h, 25, input_offset=idx, out_label="cover"
             )
@@ -117,7 +116,7 @@ def generate_main_video(
                 if len(covers) == 1:
                     input_args += ["-loop", "1", "-i", cutout]
                 else:
-                    input_args += ["-loop", "1", "-t", f"{seg_duration:.3f}", "-i", cutout]
+                    input_args += ["-loop", "1", "-t", f"{durations[0]:.3f}", "-i", cutout]
             idx += len(person_cutouts)
 
             if len(covers) == 1:
@@ -127,9 +126,12 @@ def generate_main_video(
                 )
                 person_filter = f"[{person_idx}:v]{person_zoom_chain}[personcutout]"
             else:
+                # capa de persona: corte simple (sin desvanecimiento) para no
+                # arriesgar artefactos de transparencia con xfade
                 person_filter = build_cover_sequence_filter(
                     len(person_cutouts), durations, w, h, 25,
                     input_offset=person_idx, out_label="personcutout",
+                    use_transition=False,
                 )
 
             filter_complex += (
