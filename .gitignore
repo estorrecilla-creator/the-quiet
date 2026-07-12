@@ -1,0 +1,9 @@
+venv/
+.env
+config/client_secret.json
+config/token.json
+output/
+input/*
+!input/.gitkeep
+__pycache__/
+*.pyc

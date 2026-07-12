@@ -1,0 +1,54 @@
+"""
+shorts_generator.py
+A partir de un momento (start, end) detectado por audio_analysis.py, recorta
+el audio y genera un Short vertical 1080x1920 con portada + waveform,
+más un fade in/out para que no empiece/acabe en seco.
+"""
+
+import subprocess
+import shlex
+
+
+def generate_short(
+    audio_path: str,
+    cover_path: str,
+    output_path: str,
+    start: float,
+    end: float,
+    fade_duration: float = 0.6,
+    waveform_color: str = "0xE0B0FF",
+):
+    duration = end - start
+    w, h = 1080, 1920
+    wave_h = int(h * 0.18)
+
+    filter_complex = (
+        f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS,"
+        f"afade=t=in:st=0:d={fade_duration},afade=t=out:st={duration - fade_duration}:d={fade_duration}[a0];"
+        f"[a0]asplit=2[aout][avis];"
+        f"[avis]showwaves=s={w}x{wave_h}:mode=cline:colors={waveform_color}:rate=25,"
+        f"format=rgba,colorchannelmixer=aa=0.85[wave];"
+        f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}[cover];"
+        f"[cover][wave]overlay=0:(H-h)/2:shortest=1[outv]"
+    )
+
+    cmd = (
+        f'ffmpeg -y -i {shlex.quote(audio_path)} -loop 1 -i {shlex.quote(cover_path)} '
+        f'-filter_complex "{filter_complex}" '
+        f'-map "[outv]" -map "[aout]" -t {duration} '
+        f'-c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p '
+        f'-c:a aac -b:a 192k {shlex.quote(output_path)}'
+    )
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg error:\n{result.stderr[-2000:]}")
+    return output_path
+
+
+if __name__ == "__main__":
+    import sys
+
+    audio, cover, out, start, end = sys.argv[1:6]
+    generate_short(audio, cover, out, float(start), float(end))
+    print(f"Generado: {out}")
