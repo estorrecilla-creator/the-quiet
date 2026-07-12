@@ -8,6 +8,7 @@ el vídeo "respire" con la música en vez de quedarse estático.
 import tempfile
 
 from src.audio_analysis import energy_envelope
+from src.ffmpeg_utils import escape_path as ffmpeg_filter_path  # noqa: F401  (re-exported for callers)
 
 
 def build_pulse_script(
@@ -34,10 +35,3 @@ def build_pulse_script(
     tmp.write("\n".join(lines))
     tmp.close()
     return tmp.name
-
-
-def ffmpeg_filter_path(path: str) -> str:
-    """Escapa una ruta para usarla como valor de opción dentro de un filtro
-    de ffmpeg (barras invertidas y comillas simples dan problemas en Windows
-    si no se tratan)."""
-    return path.replace("\\", "/").replace("'", r"\'")

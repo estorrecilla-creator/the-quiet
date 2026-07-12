@@ -26,7 +26,7 @@ from src.shorts_generator import generate_short
 from src.metadata_generator import generate_metadata
 
 
-def process_track(audio_path, cover_path, artist, title, genre, context, n_shorts, out_dir):
+def process_track(audio_path, cover_path, artist, title, genre, context, n_shorts, out_dir, lyrics_path=None):
     out_dir = Path(out_dir) / title.replace(" ", "_")
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -35,7 +35,7 @@ def process_track(audio_path, cover_path, artist, title, genre, context, n_short
     # 1. Vídeo principal
     print("-> Generando vídeo principal...")
     main_video_path = out_dir / "main_video.mp4"
-    generate_main_video(audio_path, cover_path, str(main_video_path))
+    generate_main_video(audio_path, cover_path, str(main_video_path), lyrics_path=lyrics_path)
 
     print("-> Generando metadatos del vídeo principal...")
     main_meta = generate_metadata(artist, title, genre, context, content_type="main")
@@ -70,6 +70,10 @@ def main():
     parser.add_argument("--context", required=True, help="Contexto/concepto artístico")
     parser.add_argument("--shorts", type=int, default=3, help="Número de shorts a generar por tema")
     parser.add_argument("--out", default="output", help="Carpeta de salida")
+    parser.add_argument(
+        "--lyrics",
+        help="Ruta a un archivo .srt con la letra sincronizada, para superponerla en el vídeo principal",
+    )
     args = parser.parse_args()
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -84,6 +88,7 @@ def main():
         process_track(
             args.audio, args.cover, args.artist, args.title,
             args.genre, args.context, args.shorts, args.out,
+            lyrics_path=args.lyrics,
         )
     elif args.album_dir:
         tracks = sorted(Path(args.album_dir).glob("*.mp3")) + sorted(Path(args.album_dir).glob("*.wav"))

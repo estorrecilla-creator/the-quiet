@@ -16,6 +16,7 @@ import os
 import subprocess
 
 from src.pulse import build_pulse_script, ffmpeg_filter_path
+from src.lyrics import subtitles_filter_fragment
 
 PULSE_FPS = 12
 
@@ -29,11 +30,14 @@ def generate_main_video(
     waveform_height_ratio: float = 0.10,
     zoom_speed: float = 0.0002,
     zoom_max: float = 1.15,
+    lyrics_path: str = None,
 ):
     """
     Genera un vídeo horizontal (YouTube) con portada + zoom lento (Ken Burns)
     + un pulso de brillo/saturación sincronizado con la energía real del
     audio (la portada "respira" con la música) + waveform fina y discreta.
+    Si se pasa `lyrics_path` (un .srt con los tiempos de la letra), se
+    superpone sincronizada sobre el vídeo.
     """
     w, h = map(int, resolution.split("x"))
     wave_h = int(h * waveform_height_ratio)
@@ -50,8 +54,16 @@ def generate_main_video(
             f"setsar=1,"
             f"sendcmd=f='{pulse_path}',"
             f"eq=brightness=0:saturation=1[cover];"
-            f"[cover][wave]overlay=0:{h - wave_h}:shortest=1[outv]"
+            f"[cover][wave]overlay=0:{h - wave_h}:shortest=1[outv0]"
         )
+
+        if lyrics_path:
+            margin_v = wave_h + 40
+            filter_complex += (
+                f";[outv0]{subtitles_filter_fragment(lyrics_path, margin_v)}[outv]"
+            )
+        else:
+            filter_complex = filter_complex.replace("[outv0]", "[outv]")
 
         cmd = [
             "ffmpeg", "-y",

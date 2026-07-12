@@ -45,9 +45,11 @@ def ask(prompt, default=None, required=True):
         print("  Este dato es obligatorio.")
 
 
-def ask_path(prompt):
+def ask_path(prompt, required=True):
     while True:
-        value = ask(prompt)
+        value = ask(prompt, required=required)
+        if not value:
+            return None
         if Path(value).expanduser().exists():
             return str(Path(value).expanduser())
         print(f"  No encuentro el archivo: {value}")
@@ -63,8 +65,13 @@ def main():
     genre = ask("Género/estilo")
     context = ask("Contexto/concepto del tema")
     shorts = int(ask("Número de Shorts a generar", "3"))
+    lyrics = ask_path(
+        "Ruta a la letra sincronizada (.srt, opcional, Enter para omitir)", required=False
+    )
 
-    out_dir = process_track(audio, cover, artist, title, genre, context, shorts, "output")
+    out_dir = process_track(
+        audio, cover, artist, title, genre, context, shorts, "output", lyrics_path=lyrics
+    )
     print(f"\nListo. Revisa la carpeta: {out_dir}")
 
 
