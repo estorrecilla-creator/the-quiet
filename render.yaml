@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: telvorn-automation
+    name: the-quiet
     env: docker
     plan: starter
     healthCheckPath: /login

@@ -7,7 +7,7 @@ vídeo principal, Shorts, títulos, descripciones y hashtags.
 
 Una sola vez:
 ```bash
-cd telvorn-automation
+cd the-quiet
 ./setup.sh
 ```
 Te instalará todo y creará `.env` — ábrelo y pon tu `ANTHROPIC_API_KEY`.
@@ -28,7 +28,7 @@ integrarlo en otro script.
 ## Instalación manual (alternativa a ./setup.sh)
 
 ```bash
-cd telvorn-automation
+cd the-quiet
 python3 -m venv venv
 source venv/bin/activate        # en Windows: venv\Scripts\activate
 pip install -r requirements.txt
