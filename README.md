@@ -3,7 +3,29 @@
 Automatiza todo el proceso de subir un tema/LP menos la música en sí:
 vídeo principal, Shorts, títulos, descripciones y hashtags.
 
-## Instalación (una vez)
+## Modo súper simple (recomendado)
+
+Una sola vez:
+```bash
+cd telvorn-automation
+./setup.sh
+```
+Te instalará todo y creará `.env` — ábrelo y pon tu `ANTHROPIC_API_KEY`.
+
+Cada vez que tengas un tema nuevo:
+1. Copia el audio y la portada a `input/`.
+2. Ejecuta:
+   ```bash
+   venv/bin/python subir_tema.py
+   ```
+3. Responde las preguntas (artista, título, género, contexto...) y espera.
+4. Revisa el resultado en `output/`.
+
+Eso es todo. El resto de este README explica el uso avanzado por línea de
+comandos (`main.py` con flags), útil si quieres automatizar LPs completos o
+integrarlo en otro script.
+
+## Instalación manual (alternativa a ./setup.sh)
 
 ```bash
 cd telvorn-automation
