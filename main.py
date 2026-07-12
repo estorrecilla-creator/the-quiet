@@ -37,32 +37,35 @@ def process_track(audio_path, cover_path, artist, title, genre, context, n_short
         print("-> Sincronizando la letra con el audio (puede tardar unos minutos)...")
     lyrics_srt, lyrics_is_temp = resolve_lyrics_srt(audio_path, lyrics_path)
 
-    # 1. Vídeo principal
-    print("-> Generando vídeo principal...")
-    main_video_path = out_dir / "main_video.mp4"
     try:
+        # 1. Vídeo principal
+        print("-> Generando vídeo principal...")
+        main_video_path = out_dir / "main_video.mp4"
         generate_main_video(audio_path, cover_path, str(main_video_path), lyrics_path=lyrics_srt)
+
+        print("-> Generando metadatos del vídeo principal...")
+        main_meta = generate_metadata(artist, title, genre, context, content_type="main")
+        with open(out_dir / "main_video_metadata.json", "w", encoding="utf-8") as f:
+            json.dump(main_meta, f, ensure_ascii=False, indent=2)
+
+        # 2. Mejores momentos -> Shorts
+        print(f"-> Detectando {n_shorts} mejores momentos...")
+        moments = find_best_moments(audio_path, top_n=n_shorts)
+
+        for i, moment in enumerate(moments, start=1):
+            print(f"-> Generando Short {i} ({moment['start']:.1f}s - {moment['end']:.1f}s)...")
+            short_path = out_dir / f"short_{i}.mp4"
+            generate_short(
+                audio_path, cover_path, str(short_path), moment["start"], moment["end"],
+                lyrics_path=lyrics_srt,
+            )
+
+            short_meta = generate_metadata(artist, title, genre, context, content_type="short")
+            with open(out_dir / f"short_{i}_metadata.json", "w", encoding="utf-8") as f:
+                json.dump(short_meta, f, ensure_ascii=False, indent=2)
     finally:
         if lyrics_is_temp:
             os.remove(lyrics_srt)
-
-    print("-> Generando metadatos del vídeo principal...")
-    main_meta = generate_metadata(artist, title, genre, context, content_type="main")
-    with open(out_dir / "main_video_metadata.json", "w", encoding="utf-8") as f:
-        json.dump(main_meta, f, ensure_ascii=False, indent=2)
-
-    # 2. Mejores momentos -> Shorts
-    print(f"-> Detectando {n_shorts} mejores momentos...")
-    moments = find_best_moments(audio_path, top_n=n_shorts)
-
-    for i, moment in enumerate(moments, start=1):
-        print(f"-> Generando Short {i} ({moment['start']:.1f}s - {moment['end']:.1f}s)...")
-        short_path = out_dir / f"short_{i}.mp4"
-        generate_short(audio_path, cover_path, str(short_path), moment["start"], moment["end"])
-
-        short_meta = generate_metadata(artist, title, genre, context, content_type="short")
-        with open(out_dir / f"short_{i}_metadata.json", "w", encoding="utf-8") as f:
-            json.dump(short_meta, f, ensure_ascii=False, indent=2)
 
     print(f"=== Listo: {out_dir} ===")
     return out_dir

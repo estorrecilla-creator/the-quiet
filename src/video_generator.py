@@ -19,6 +19,7 @@ from pathlib import Path
 from src.ffmpeg_utils import escape_path
 from src.star_light import build_star_script, STAR_SIZE
 from src.lyrics import srt_to_ass, subtitles_filter_fragment
+from src.person_mask import extract_person_cutout
 
 STAR_FPS = 12
 GLOW_ASSET = str(Path(__file__).resolve().parent.parent / "assets" / "glow.png")
@@ -48,23 +49,35 @@ def generate_main_video(
     wave_h = int(h * waveform_height_ratio)
 
     star_script = build_star_script(audio_path, cover_path, w, h, fps=STAR_FPS)
+    ass_path = None
+    person_cutout = extract_person_cutout(cover_path)
     try:
         star_path_arg = escape_path(star_script)
-        glow_path_arg = escape_path(GLOW_ASSET)
+
+        zoom_chain = (
+            f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+            f"scale=3840:2160,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,setsar=1"
+        )
 
         filter_complex = (
             f"[0:a]showwaves=s={w}x{wave_h}:mode=cline:colors={waveform_color}:rate={waveform_rate},"
             f"format=rgba,colorchannelmixer=aa=0.5[wave];"
-            f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
-            f"scale=3840:2160,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,"
-            f"setsar=1,sendcmd=f='{star_path_arg}'[cover];"
+            f"[1:v]{zoom_chain},sendcmd=f='{star_path_arg}'[cover];"
             f"[2:v]scale={STAR_SIZE}:{STAR_SIZE},format=rgba,sendcmd=f='{star_path_arg}',"
             f"colorchannelmixer=aa=0.5[star];"
-            f"[cover][star]overlay=x=0:y=0[coverstar];"
-            f"[coverstar][wave]overlay=0:{h - wave_h}:shortest=1[outv0]"
+            f"[cover][star]overlay=x=0:y=0[coverstar]"
         )
 
-        ass_path = None
+        base_label = "coverstar"
+        if person_cutout:
+            filter_complex += (
+                f";[3:v]format=rgba,{zoom_chain}[personcutout];"
+                f"[coverstar][personcutout]overlay=x=0:y=0[coverstarperson]"
+            )
+            base_label = "coverstarperson"
+
+        filter_complex += f";[{base_label}][wave]overlay=0:{h - wave_h}:shortest=1[outv0]"
+
         if lyrics_path:
             margin_v = wave_h + 12
             ass_path = srt_to_ass(lyrics_path, w, h, margin_v)
@@ -79,6 +92,10 @@ def generate_main_video(
             "-i", audio_path,
             "-loop", "1", "-i", cover_path,
             "-loop", "1", "-i", GLOW_ASSET,
+        ]
+        if person_cutout:
+            cmd += ["-loop", "1", "-i", person_cutout]
+        cmd += [
             "-filter_complex", filter_complex,
             "-map", "[outv]", "-map", "0:a",
             "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
@@ -94,6 +111,8 @@ def generate_main_video(
         os.remove(star_script)
         if ass_path:
             os.remove(ass_path)
+        if person_cutout:
+            os.remove(person_cutout)
 
 
 if __name__ == "__main__":

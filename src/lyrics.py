@@ -35,6 +35,7 @@ _SRT_TIME_RE = re.compile(
 
 
 def _parse_srt(srt_path: str):
+    """Devuelve [(start_seg, end_seg, text), ...] en segundos (float)."""
     with open(srt_path, encoding="utf-8") as f:
         content = f.read()
 
@@ -50,16 +51,58 @@ def _parse_srt(srt_path: str):
         m = _SRT_TIME_RE.search(time_line)
         if not m:
             continue
-        start = f"{int(m.group(1))}:{m.group(2)}:{m.group(3)}.{m.group(4)[:2]}"
-        end = f"{int(m.group(5))}:{m.group(6)}:{m.group(7)}.{m.group(8)[:2]}"
+        start = (
+            int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+            + int(m.group(4)) / 1000
+        )
+        end = (
+            int(m.group(5)) * 3600 + int(m.group(6)) * 60 + int(m.group(7))
+            + int(m.group(8)) / 1000
+        )
         text_lines = lines[lines.index(time_line) + 1:]
         text = "\\N".join(text_lines)
         entries.append((start, end, text))
     return entries
 
 
-def srt_to_ass(srt_path: str, width: int, height: int, margin_v: int, font_size: int = 26) -> str:
+def _format_ass_time(t: float) -> str:
+    t = max(t, 0.0)
+    h = int(t // 3600)
+    m = int((t % 3600) // 60)
+    s = int(t % 60)
+    cs = int(round((t - int(t)) * 100))
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+def srt_to_ass(
+    srt_path: str,
+    width: int,
+    height: int,
+    margin_v: int,
+    font_size: int = 26,
+    offset: float = 0.0,
+    duration: float = None,
+) -> str:
+    """
+    Convierte un .srt a .ass con la resolución del vídeo declarada.
+    Si se pasan `offset`/`duration` (uso en Shorts, que son un recorte del
+    tema completo), las líneas se desplazan restando `offset` y se recortan
+    al rango [0, duration], descartando las que caigan fuera por completo.
+    """
     entries = _parse_srt(srt_path)
+
+    if offset or duration is not None:
+        shifted = []
+        for start, end, text in entries:
+            s = start - offset
+            e = end - offset
+            if duration is not None and (e <= 0 or s >= duration):
+                continue
+            s = max(s, 0.0)
+            if duration is not None:
+                e = min(e, duration)
+            shifted.append((s, e, text))
+        entries = shifted
 
     header = f"""[Script Info]
 PlayResX: {width}
@@ -76,7 +119,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     lines = [header]
     for start, end, text in entries:
-        lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}")
+        lines.append(
+            f"Dialogue: 0,{_format_ass_time(start)},{_format_ass_time(end)},"
+            f"Default,,0,0,0,,{text}"
+        )
 
     tmp = tempfile.NamedTemporaryFile(
         mode="w", suffix=".ass", prefix="lyrics_", delete=False, encoding="utf-8"
