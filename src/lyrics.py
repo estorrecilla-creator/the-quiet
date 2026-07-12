@@ -82,12 +82,16 @@ def srt_to_ass(
     font_size: int = 58,
     offset: float = 0.0,
     duration: float = None,
+    manual_shift: float = 0.0,
 ) -> str:
     """
     Convierte un .srt a .ass con la resolución del vídeo declarada.
     Si se pasan `offset`/`duration` (uso en Shorts, que son un recorte del
     tema completo), las líneas se desplazan restando `offset` y se recortan
     al rango [0, duration], descartando las que caigan fuera por completo.
+    `manual_shift` es un ajuste manual adicional en segundos (positivo =
+    retrasa la letra, negativo = la adelanta), para corregir a mano un
+    desfase que venga del reconocimiento de voz automático.
     """
     entries = _parse_srt(srt_path)
 
@@ -103,6 +107,12 @@ def srt_to_ass(
                 e = min(e, duration)
             shifted.append((s, e, text))
         entries = shifted
+
+    if manual_shift:
+        entries = [
+            (max(s + manual_shift, 0.0), max(e + manual_shift, 0.0), text)
+            for s, e, text in entries
+        ]
 
     header = f"""[Script Info]
 PlayResX: {width}

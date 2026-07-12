@@ -73,9 +73,23 @@ def main():
         "sincronizar automáticamente; opcional, Enter para omitir)",
         required=False,
     )
+    lyrics_offset = 0.0
+    if lyrics:
+        offset_raw = ask(
+            "Ajuste manual de la letra en segundos (positivo = retrasa, "
+            "negativo = adelanta; Enter para no ajustar)",
+            default="0",
+            required=False,
+        )
+        try:
+            lyrics_offset = float(offset_raw) if offset_raw else 0.0
+        except ValueError:
+            print("  Valor no válido, no se aplicará ajuste.")
+            lyrics_offset = 0.0
 
     out_dir = process_track(
-        audio, cover, artist, title, genre, context, shorts, "output", lyrics_path=lyrics
+        audio, cover, artist, title, genre, context, shorts, "output",
+        lyrics_path=lyrics, lyrics_offset=lyrics_offset,
     )
     print(f"\nListo. Revisa la carpeta: {out_dir}")
 

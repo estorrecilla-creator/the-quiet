@@ -30,6 +30,7 @@ def generate_short(
     waveform_rate: float = 7,
     movement: str = "zoom_in",
     lyrics_path: str = None,
+    lyrics_offset: float = 0.0,
 ):
     duration = end - start
     w, h = 1080, 1920
@@ -69,7 +70,10 @@ def generate_short(
 
         if lyrics_path:
             margin_v = wave_h + 12
-            ass_path = srt_to_ass(lyrics_path, w, h, margin_v, offset=start, duration=duration)
+            ass_path = srt_to_ass(
+                lyrics_path, w, h, margin_v, offset=start, duration=duration,
+                manual_shift=lyrics_offset,
+            )
             filter_complex += f";[outv0]{subtitles_filter_fragment(ass_path)}[outv]"
         else:
             filter_complex = filter_complex.replace("[outv0]", "[outv]")

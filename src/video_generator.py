@@ -45,6 +45,7 @@ def generate_main_video(
     zoom_speed: float = 0.0002,
     zoom_max: float = 1.15,
     lyrics_path: str = None,
+    lyrics_offset: float = 0.0,
 ):
     """
     Genera un vídeo horizontal (YouTube). `cover_path` puede ser una sola
@@ -148,7 +149,7 @@ def generate_main_video(
 
         if lyrics_path:
             margin_v = wave_h + 12
-            ass_path = srt_to_ass(lyrics_path, w, h, margin_v)
+            ass_path = srt_to_ass(lyrics_path, w, h, margin_v, manual_shift=lyrics_offset)
             filter_complex += (
                 f";[outv0]{subtitles_filter_fragment(ass_path)}[outv]"
             )

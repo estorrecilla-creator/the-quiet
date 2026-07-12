@@ -47,7 +47,10 @@ def resolve_cover(cover_arg):
     return cover_arg
 
 
-def process_track(audio_path, cover_path, artist, title, genre, context, n_shorts, out_dir, lyrics_path=None):
+def process_track(
+    audio_path, cover_path, artist, title, genre, context, n_shorts, out_dir,
+    lyrics_path=None, lyrics_offset=0.0,
+):
     out_dir = Path(out_dir) / title.replace(" ", "_")
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -60,11 +63,25 @@ def process_track(audio_path, cover_path, artist, title, genre, context, n_short
         print("-> Sincronizando la letra con el audio (puede tardar unos minutos)...")
     lyrics_srt, lyrics_is_temp = resolve_lyrics_srt(audio_path, lyrics_path)
 
+    if lyrics_srt and lyrics_is_temp:
+        # Guardamos el .srt auto-sincronizado en la carpeta de salida para
+        # que se pueda revisar/corregir a mano y reutilizar directamente
+        # como .srt (sin volver a pasar por el reconocimiento de voz).
+        saved_srt = out_dir / "letra_sincronizada.srt"
+        with open(lyrics_srt, encoding="utf-8") as f:
+            saved_srt.write_text(f.read(), encoding="utf-8")
+        print(f"-> Letra auto-sincronizada guardada en: {saved_srt}")
+        print("   Si sale desfasada, ábrela y ajusta a mano los tiempos, o "
+              "usa un offset manual.")
+
     try:
         # 1. Vídeo principal
         print("-> Generando vídeo principal...")
         main_video_path = out_dir / "main_video.mp4"
-        generate_main_video(audio_path, cover, str(main_video_path), lyrics_path=lyrics_srt)
+        generate_main_video(
+            audio_path, cover, str(main_video_path), lyrics_path=lyrics_srt,
+            lyrics_offset=lyrics_offset,
+        )
 
         print("-> Generando metadatos del vídeo principal...")
         main_meta = generate_metadata(artist, title, genre, context, content_type="main")
@@ -82,6 +99,7 @@ def process_track(audio_path, cover_path, artist, title, genre, context, n_short
                 audio_path, cover_for_shorts, str(short_path), moment["start"], moment["end"],
                 movement=MOVEMENTS[(i - 1) % len(MOVEMENTS)],
                 lyrics_path=lyrics_srt,
+                lyrics_offset=lyrics_offset,
             )
 
             short_meta = generate_metadata(artist, title, genre, context, content_type="short")
@@ -122,6 +140,16 @@ def main():
             "para sincronizarlo automáticamente contra el audio"
         ),
     )
+    parser.add_argument(
+        "--lyrics-offset",
+        type=float,
+        default=0.0,
+        help=(
+            "Ajuste manual en segundos de la letra (positivo = retrasa, "
+            "negativo = adelanta). Útil si el reconocimiento automático "
+            "la deja algo desfasada. Ej: -3 si sale 3s tarde."
+        ),
+    )
     args = parser.parse_args()
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -136,7 +164,7 @@ def main():
         process_track(
             args.audio, args.cover, args.artist, args.title,
             args.genre, args.context, args.shorts, args.out,
-            lyrics_path=args.lyrics,
+            lyrics_path=args.lyrics, lyrics_offset=args.lyrics_offset,
         )
     elif args.album_dir:
         tracks = sorted(Path(args.album_dir).glob("*.mp3")) + sorted(Path(args.album_dir).glob("*.wav"))
@@ -145,6 +173,7 @@ def main():
             process_track(
                 str(track_path), args.cover, args.artist, track_title,
                 args.genre, args.context, args.shorts, args.out,
+                lyrics_offset=args.lyrics_offset,
             )
     else:
         parser.error("Debes indicar --audio o --album-dir")
