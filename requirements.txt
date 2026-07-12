@@ -4,5 +4,6 @@ soundfile
 anthropic
 python-dotenv
 faster-whisper
+scikit-image
 google-auth-oauthlib
 google-api-python-client
