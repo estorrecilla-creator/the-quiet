@@ -114,6 +114,21 @@ Todo queda como **borrador local**. Tú revisas y subes manualmente, o usas
 `programar_youtube.py` para calendarizar y programar la subida automática
 a YouTube (ver más abajo).
 
+## Generar las portadas con IA (opcional)
+
+Si no quieres crear las portadas a mano, `src/image_generator.py` las genera
+directamente a partir de prompts de texto usando la API de imágenes de
+OpenAI, y las descarga con el nombre correcto (`01.png`, `02.png`...) listas
+para usar como `--cover input/mi_tema/` (varias portadas, una por movimiento
+de cámara).
+
+Configuración: añade `OPENAI_API_KEY=sk-...` a tu `.env` (crea una clave en
+[platform.openai.com](https://platform.openai.com)). Uso de ejemplo:
+
+```bash
+python -m src.image_generator input/mi_tema "prompt de la primera portada" "prompt de la segunda"
+```
+
 ## Programar la publicación en YouTube
 
 Una vez tienes el vídeo principal y los Shorts de un tema en `output/`, hay

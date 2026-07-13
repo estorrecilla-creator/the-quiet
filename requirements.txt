@@ -2,6 +2,7 @@ librosa==0.11.0
 numpy
 soundfile
 anthropic
+openai
 python-dotenv
 faster-whisper
 scikit-image
