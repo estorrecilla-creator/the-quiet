@@ -25,11 +25,22 @@ Orden de publicación sugerido: el de la tabla del dossier (1 a 12), es el orden
   con `src/thumbnail_template.py`, que sustituye el texto del álbum por el
   título de cada tema — usa Jura Medium por defecto, coherente con la
   portada final.
-- **Referencia de mastering para el tema 7 ("The Light I Left On")**:
-  "Eye in the Sky" — Alan Parsons Project. Referentes del grupo: entre
-  Pink Floyd y Alan Parsons Project, con algún momento puntual que
-  recuerda a Scorpions. Referencia a decidir para el resto de temas
-  cuando toque cada uno.
+- **Referencias de mastering**: referentes del grupo, entre Pink Floyd y
+  Alan Parsons Project, con algún momento puntual que recuerda a
+  Scorpions. En homenaje al padre del usuario, quien le descubrió estos
+  grupos y de quien heredó el disco de referencia.
+  - **Base del disco** (mayoría de temas, frío/atmosférico): "Shine On
+    You Crazy Diamond" — Pink Floyd.
+  - **Tema 7** ("The Light I Left On", la luz/único momento cálido):
+    "Eye in the Sky" — Alan Parsons Project.
+  - **Temas 3 y 10** ("Static Between Hands" y su Reprise — el intento de
+    resurgir/reconectar, mismo motivo, ánimo más bajo en el 10): "Wish
+    You Were Here" — Pink Floyd (misma referencia para ambos, refuerza
+    que son el mismo motivo).
+  - **Tema 9** ("Fragments Kept Under the Tongue", la locura/pérdida de
+    la conciencia): "Brain Damage / Eclipse" — Pink Floyd.
+  - Resto de temas: a decidir cuando toque cada uno (probablemente la
+    referencia base, salvo que el tema pida lo contrario).
 
 ## Calendario de lanzamiento
 
