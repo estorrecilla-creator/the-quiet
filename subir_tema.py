@@ -66,9 +66,9 @@ def ask(prompt, default=None, required=True):
         print("  Este dato es obligatorio.")
 
 
-def ask_path(prompt, required=True):
+def ask_path(prompt, required=True, default=None):
     while True:
-        value = ask(prompt, required=required)
+        value = ask(prompt, default=default, required=required)
         if not value:
             return None
         if Path(value).expanduser().exists():
@@ -106,6 +106,33 @@ def _pick_audio():
         if raw and Path(raw).expanduser().exists():
             return str(Path(raw).expanduser())
         print("  Opción no válida.")
+
+
+def _maybe_master_audio(audio_path, memory):
+    do_master = ask(
+        "¿Masterizar el audio antes de continuar? (con Matchering, gratis y "
+        "local; necesita una canción de referencia con el sonido que "
+        "buscas) [s/N]", "n"
+    ).lower()
+    if not do_master.startswith("s"):
+        return audio_path
+
+    reference = ask_path(
+        "Ruta a la canción de referencia (mp3/wav)",
+        default=memory.get("reference_track"),
+    )
+    memory["reference_track"] = reference
+    _save_memory(memory)
+
+    from src.mastering import master_audio
+    mastered_dir = Path("mastered")
+    mastered_dir.mkdir(exist_ok=True)
+    out_path = str(mastered_dir / f"{Path(audio_path).stem}_mastered.wav")
+    print("-> Masterizando con Matchering (puede tardar un minuto)...")
+    master_audio(audio_path, reference, out_path)
+    print(f"   Audio masterizado guardado en: {out_path}")
+    print("   (Este mismo archivo es el que puedes subir a DistroKid.)")
+    return out_path
 
 
 def _resolve_cover_interactive(artist, title, genre, context):
@@ -151,10 +178,13 @@ def main():
     print("=== Telvorn Automation — asistente ===\n")
 
     audio = _pick_audio()
+    suggested_title = Path(audio).stem
     memory = _load_memory()
 
+    audio = _maybe_master_audio(audio, memory)
+
     artist = ask("Artista", memory.get("artist"))
-    title = ask("Título del tema", Path(audio).stem)
+    title = ask("Título del tema", suggested_title)
     genre = ask("Género/estilo", memory.get("genre"))
     context = ask("Contexto/concepto del tema", memory.get("context"))
 
