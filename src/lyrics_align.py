@@ -14,7 +14,7 @@ import difflib
 import re
 import tempfile
 
-MODEL_SIZE = "small"
+MODEL_SIZE = "medium"
 
 
 def _normalize(word: str) -> str:
@@ -76,7 +76,13 @@ def align_lyrics(audio_path: str, lyrics_text_path: str, model_size: str = MODEL
                 user_word_line.append(li)
 
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
-    segments, _ = model.transcribe(audio_path, word_timestamps=True)
+    # Pasar la letra real como prompt inicial sesga el reconocimiento hacia
+    # esas palabras exactas (nombres, jerga...) en vez de dejar que Whisper
+    # adivine a ciegas lo que se está cantando.
+    lyrics_prompt = " ".join(lines)
+    segments, _ = model.transcribe(
+        audio_path, word_timestamps=True, initial_prompt=lyrics_prompt
+    )
 
     whisper_words = []
     whisper_times = []
