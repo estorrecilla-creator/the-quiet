@@ -25,9 +25,17 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = ["https://www.googleapis.com/auth/youtube"]  # gestión completa:
+# subida de vídeos + listas de reproducción + ajustes del canal.
+# (antes solo pedía youtube.upload, insuficiente para listas de
+# reproducción; si vienes de una versión anterior, borra config/token.json
+# para volver a autorizar con el permiso ampliado)
 CLIENT_SECRET_PATH = "config/client_secret.json"
 TOKEN_PATH = "config/token.json"
+
+
+def get_authenticated_service():
+    return _get_authenticated_service()
 
 
 def _get_authenticated_service():

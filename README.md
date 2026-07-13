@@ -157,6 +157,43 @@ calendario propuesto y lo guarda en `calendario.json` dentro de esa carpeta
 **antes** de subir nada — puedes revisarlo o editarlo a mano. Solo sube y
 programa de verdad si confirmas explícitamente.
 
+**Nota si ya lo tenías configurado de antes**: el permiso pedido a Google
+se ha ampliado (de "solo subir vídeos" a "gestión completa del canal", para
+poder crear listas de reproducción). Borra `config/token.json` para que la
+próxima subida te pida autorizar de nuevo con el permiso ampliado.
+
+### Listas de reproducción y enlaces en la descripción
+
+Al confirmar la subida, también te pregunta:
+- **Nombre de una lista de reproducción** (ej. el nombre del LP): si la
+  das, crea la lista (o reutiliza la que ya exista con ese nombre — no
+  duplica) y añade ahí el vídeo principal, en la posición correcta si el
+  título del tema empieza por un número (ej. "10 Static Between Hands
+  (Reprise)" → posición 10). El enlace a esa lista se añade automáticamente
+  a la descripción de todos los vídeos y Shorts de ese tema.
+- **Enlaces extra** (redes, web...): lo que pegues se añade tal cual al
+  final de la descripción de todos los vídeos/Shorts de esa tanda.
+
+### Ajustar el canal (palabras clave, "Acerca de")
+
+`configurar_canal_youtube.py` — asistente aparte para las palabras clave y
+la descripción del canal (ayuda a que YouTube lo recomiende al nicho
+correcto). Se ejecuta una vez, o cuando quieras cambiarlas:
+```bash
+python configurar_canal_youtube.py
+```
+
+### Lo que NO se puede automatizar por API (hazlo a mano en YouTube Studio)
+
+- **Pantallas finales y tarjetas** dentro del vídeo (enlazar a otro vídeo/
+  lista al final): Estudio → tu vídeo → Editor → Elementos → Pantalla
+  final / Tarjetas.
+- **Tráiler de canal** para quien no está suscrito: Estudio →
+  Personalización → Diseño → "Vídeo destacado para visitantes que no
+  están suscritos".
+- **Comentario fijado** con enlaces en cada vídeo: entra al vídeo,
+  publica el comentario, menú (⋮) → "Fijar".
+
 ## Publicar en Facebook e Instagram
 
 `src/meta_uploader.py` ya está listo para publicar en una Página de

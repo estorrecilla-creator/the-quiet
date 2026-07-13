@@ -14,6 +14,7 @@ Uso:
 """
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -125,7 +126,36 @@ def main():
     )
     track_title = Path(out_dir).name.replace("_", " ")
 
-    from src.youtube_uploader import upload_video
+    playlist_name = ask(
+        "Nombre de la lista de reproducción del LP en la que agrupar este "
+        "tema (Enter para no usar ninguna)",
+        required=False,
+    )
+    extra_links = ask(
+        "Enlaces extra para la descripción de todos los vídeos/Shorts de "
+        "este tema (redes, web...; pega el texto tal cual, Enter para "
+        "ninguno)",
+        required=False,
+    )
+
+    from src.youtube_uploader import upload_video, get_authenticated_service
+
+    youtube = None
+    playlist_id = None
+    if playlist_name:
+        from src.youtube_playlists import create_or_get_playlist, playlist_url
+        youtube = get_authenticated_service()
+        playlist_id = create_or_get_playlist(youtube, playlist_name)
+        print(f"-> Lista de reproducción: {playlist_url(playlist_id)}")
+
+    link_block = ""
+    if playlist_id:
+        link_block += f"\n\n▶ Escucha todo el álbum: {playlist_url(playlist_id)}"
+    if extra_links:
+        link_block += f"\n\n{extra_links}"
+
+    track_number_match = re.match(r"^(\d+)", track_title)
+    track_position = int(track_number_match.group(1)) - 1 if track_number_match else None
 
     schedule = load_schedule(out_dir)  # por si se editó a mano
     for item in schedule:
@@ -137,15 +167,22 @@ def main():
         else:
             thumbnail_path = _extract_thumbnail(item["video_path"]) if item["kind"] == "main" else None
         try:
-            upload_video(
+            video_id = upload_video(
                 video_path=item["video_path"],
                 title=item["title"],
-                description=item["description"],
+                description=item["description"] + link_block,
                 tags=item["tags_youtube"],
                 publish_at=item["publish_at_utc"],
                 thumbnail_path=thumbnail_path,
                 default_language=idioma,
             )
+            item["video_id"] = video_id
+            save_schedule(schedule, out_dir)
+
+            if playlist_id and item["kind"] == "main":
+                from src.youtube_playlists import add_video_to_playlist
+                add_video_to_playlist(youtube, playlist_id, video_id, position=track_position)
+                print(f"-> Añadido a la lista de reproducción (posición {track_position}).")
         finally:
             if thumbnail_path:
                 os.remove(thumbnail_path)
