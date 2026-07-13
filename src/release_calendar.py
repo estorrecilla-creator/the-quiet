@@ -67,8 +67,17 @@ def build_schedule(out_dir, start_date, start_hour=18, start_minute=0, interval_
         with open(item["meta_path"], encoding="utf-8") as f:
             meta = json.load(f)
 
+        description = meta.get("description", "")
+        hashtags = meta.get("hashtags", [])
+        if hashtags:
+            # Los hashtags de la descripción son los que YouTube usa para
+            # el descubrimiento por nicho (los 3 primeros aparecen encima
+            # del título del vídeo); si no se añaden aquí, se generan pero
+            # nunca llegan a subirse.
+            description = description.rstrip() + "\n\n" + " ".join(hashtags)
+
         item["title"] = meta.get("title", "")
-        item["description"] = meta.get("description", "")
+        item["description"] = description
         item["tags_youtube"] = meta.get("tags_youtube", [])
         item["publish_at_local"] = local_dt.strftime("%Y-%m-%d %H:%M (hora España)")
         item["publish_at_utc"] = local_dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")

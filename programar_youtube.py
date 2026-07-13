@@ -13,11 +13,30 @@ Uso:
     python programar_youtube.py
 """
 
+import os
+import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
 from src.release_calendar import build_schedule, save_schedule, load_schedule
+
+
+def _extract_thumbnail(video_path, t=5.0):
+    """
+    Saca un fotograma del vídeo como miniatura personalizada (sin esto,
+    YouTube pone una a medias del vídeo elegida al azar, peor para el
+    click-through). Devuelve None si ffmpeg falla, sin bloquear la subida.
+    """
+    out_path = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False).name
+    result = subprocess.run(
+        ["ffmpeg", "-y", "-ss", str(t), "-i", video_path, "-frames:v", "1", "-q:v", "2", out_path],
+        capture_output=True,
+    )
+    if result.returncode != 0 or not os.path.getsize(out_path):
+        return None
+    return out_path
 
 
 def _strip_quotes(value):
@@ -83,18 +102,30 @@ def main():
               "confirmarlo (elige 'r' para reutilizar el calendario guardado).")
         return
 
+    idioma = ask(
+        "Idioma principal del contenido (es/en...; Enter para no indicarlo)",
+        required=False,
+    )
+
     from src.youtube_uploader import upload_video
 
     schedule = load_schedule(out_dir)  # por si se editó a mano
     for item in schedule:
         print(f"\n-> Subiendo {Path(item['video_path']).name} (programado para {item['publish_at_local']})...")
-        upload_video(
-            video_path=item["video_path"],
-            title=item["title"],
-            description=item["description"],
-            tags=item["tags_youtube"],
-            publish_at=item["publish_at_utc"],
-        )
+        thumbnail_path = _extract_thumbnail(item["video_path"]) if item["kind"] == "main" else None
+        try:
+            upload_video(
+                video_path=item["video_path"],
+                title=item["title"],
+                description=item["description"],
+                tags=item["tags_youtube"],
+                publish_at=item["publish_at_utc"],
+                thumbnail_path=thumbnail_path,
+                default_language=idioma,
+            )
+        finally:
+            if thumbnail_path:
+                os.remove(thumbnail_path)
 
     print("\nListo. Los vídeos están subidos (ocultos) y se publicarán solos en su fecha.")
 

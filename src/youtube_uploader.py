@@ -60,6 +60,9 @@ def upload_video(
     category_id: str = "10",  # 10 = Music
     privacy_status: str = "private",  # private | unlisted | public
     publish_at: str = None,  # RFC3339 UTC, ej "2026-07-20T17:00:00Z"
+    thumbnail_path: str = None,
+    default_language: str = None,  # ej "es" o "en"; ayuda a YouTube a
+    # mostrar el vídeo a la audiencia/nicho del idioma correcto
 ):
     """
     Si se pasa `publish_at`, el vídeo se sube oculto y YouTube lo publica
@@ -79,15 +82,17 @@ def upload_video(
     if publish_at:
         status["publishAt"] = publish_at
 
-    body = {
-        "snippet": {
-            "title": title[:100],
-            "description": description,
-            "tags": tags,
-            "categoryId": category_id,
-        },
-        "status": status,
+    snippet = {
+        "title": title[:100],
+        "description": description,
+        "tags": tags,
+        "categoryId": category_id,
     }
+    if default_language:
+        snippet["defaultLanguage"] = default_language
+        snippet["defaultAudioLanguage"] = default_language
+
+    body = {"snippet": snippet, "status": status}
 
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True, mimetype="video/mp4")
 
@@ -100,6 +105,13 @@ def upload_video(
             print(f"Subiendo... {int(status.progress() * 100)}%")
 
     video_id = response["id"]
+
+    if thumbnail_path:
+        youtube.thumbnails().set(
+            videoId=video_id, media_body=MediaFileUpload(thumbnail_path)
+        ).execute()
+        print("Miniatura personalizada subida.")
+
     if publish_at:
         print(f"Subido (oculto) y programado para {publish_at}: https://youtube.com/watch?v={video_id}")
     else:
