@@ -107,10 +107,18 @@ def upload_video(
     video_id = response["id"]
 
     if thumbnail_path:
-        youtube.thumbnails().set(
-            videoId=video_id, media_body=MediaFileUpload(thumbnail_path)
-        ).execute()
-        print("Miniatura personalizada subida.")
+        try:
+            youtube.thumbnails().set(
+                videoId=video_id, media_body=MediaFileUpload(thumbnail_path)
+            ).execute()
+            print("Miniatura personalizada subida.")
+        except Exception as e:
+            print(
+                f"Aviso: no se pudo subir la miniatura personalizada ({e}). "
+                "El vídeo sigue subido bien, solo se queda sin miniatura propia — "
+                "lo más habitual es que el canal necesite el teléfono verificado "
+                "para esta función (youtube.com/verify)."
+            )
 
     if publish_at:
         print(f"Subido (oculto) y programado para {publish_at}: https://youtube.com/watch?v={video_id}")
