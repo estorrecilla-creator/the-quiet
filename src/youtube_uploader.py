@@ -41,7 +41,11 @@ def _get_authenticated_service():
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
+            # host y bind_addr forzados a 127.0.0.1 (no "localhost"): en
+            # Windows el navegador a veces resuelve "localhost" como IPv6
+            # mientras el servidor local solo escucha en IPv4, y la
+            # redirección de Google falla con "conexión rechazada".
+            creds = flow.run_local_server(host="127.0.0.1", bind_addr="127.0.0.1", port=0)
         with open(TOKEN_PATH, "wb") as f:
             pickle.dump(creds, f)
 
