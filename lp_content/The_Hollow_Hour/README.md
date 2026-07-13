@@ -25,6 +25,11 @@ Orden de publicación sugerido: el de la tabla del dossier (1 a 12), es el orden
   con `src/thumbnail_template.py`, que sustituye el texto del álbum por el
   título de cada tema — usa Jura Medium por defecto, coherente con la
   portada final.
+- **Referencia de mastering para el tema 7 ("The Light I Left On")**:
+  "Eye in the Sky" — Alan Parsons Project. Referentes del grupo: entre
+  Pink Floyd y Alan Parsons Project, con algún momento puntual que
+  recuerda a Scorpions. Referencia a decidir para el resto de temas
+  cuando toque cada uno.
 
 ## Calendario de lanzamiento
 
