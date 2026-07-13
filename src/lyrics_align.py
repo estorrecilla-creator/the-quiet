@@ -5,16 +5,49 @@ frase por línea) con el audio real, usando reconocimiento de voz local
 (faster-whisper) para averiguar cuándo se canta cada palabra, y genera un
 .srt listo para usar con lyrics.py / video_generator.py.
 
+Antes de transcribir, se aísla la voz de la instrumentación con Demucs:
+reconocer voz cantada mezclada con batería/guitarras es mucho más difícil
+para cualquier IA de voz que reconocer solo voz, así que este paso mejora
+mucho la precisión de las frases que antes salían descuadradas.
+
 No es perfecto (el reconocimiento de voz cantada nunca lo es al 100%), pero
 hace la mayor parte del trabajo: revisa el .srt generado y ajusta a mano
-alguna línea suelta si hace falta.
+alguna línea suelta si hace falta (o usa el ajuste manual de desfase).
 """
 
 import difflib
 import re
+import shutil
+import subprocess
+import sys
 import tempfile
+from pathlib import Path
 
 MODEL_SIZE = "medium"
+
+
+def _separate_vocals(audio_path: str) -> str:
+    """
+    Aísla la pista de voz del resto de instrumentos con Demucs, en una
+    carpeta temporal. Devuelve la ruta al .wav de la voz aislada. Si Demucs
+    no está instalado o falla, se avisa y se sigue con el audio original
+    (peor precisión, pero no bloquea el proceso).
+    """
+    out_dir = tempfile.mkdtemp(prefix="demucs_")
+    result = subprocess.run(
+        [sys.executable, "-m", "demucs", "--two-stems", "vocals", "-o", out_dir, audio_path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise RuntimeError(f"Demucs no pudo separar la voz:\n{result.stderr[-2000:]}")
+
+    stem = Path(audio_path).stem
+    matches = list(Path(out_dir).rglob(f"{stem}/vocals.wav"))
+    if not matches:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise RuntimeError("Demucs no generó el archivo de voz esperado.")
+    return str(matches[0])
 
 
 def _normalize(word: str) -> str:
@@ -75,14 +108,28 @@ def align_lyrics(audio_path: str, lyrics_text_path: str, model_size: str = MODEL
                 user_words.append(nw)
                 user_word_line.append(li)
 
-    model = WhisperModel(model_size, device="cpu", compute_type="int8")
-    # Pasar la letra real como prompt inicial sesga el reconocimiento hacia
-    # esas palabras exactas (nombres, jerga...) en vez de dejar que Whisper
-    # adivine a ciegas lo que se está cantando.
-    lyrics_prompt = " ".join(lines)
-    segments, _ = model.transcribe(
-        audio_path, word_timestamps=True, initial_prompt=lyrics_prompt
-    )
+    vocals_dir = None
+    transcribe_path = audio_path
+    try:
+        print("-> Aislando la voz de la instrumentación (Demucs)...")
+        transcribe_path = _separate_vocals(audio_path)
+        vocals_dir = str(Path(transcribe_path).parents[2])
+    except Exception as e:
+        print(f"   Aviso: no se pudo aislar la voz ({e}); sigo con el audio completo.")
+
+    try:
+        model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        # Pasar la letra real como prompt inicial sesga el reconocimiento hacia
+        # esas palabras exactas (nombres, jerga...) en vez de dejar que Whisper
+        # adivine a ciegas lo que se está cantando.
+        lyrics_prompt = " ".join(lines)
+        segments, _ = model.transcribe(
+            transcribe_path, word_timestamps=True, initial_prompt=lyrics_prompt
+        )
+        segments = list(segments)
+    finally:
+        if vocals_dir:
+            shutil.rmtree(vocals_dir, ignore_errors=True)
 
     whisper_words = []
     whisper_times = []
