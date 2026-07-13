@@ -58,6 +58,57 @@ def generate_image_prompts(artist, track_title, genre, context, n_images=3):
     return result["prompts"]
 
 
+STOCK_SYSTEM_PROMPT = """Eres un editor de vídeo buscando metraje de stock (banco de
+vídeo libre de derechos tipo Pexels/Pixabay) para acompañar un tema musical.
+Generas búsquedas cortas en inglés (2-4 palabras, como las que escribirías en
+el buscador de un banco de vídeo), de escenas/objetos concretos y filmables
+de verdad (nada abstracto ni imposible de encontrar como metraje real). Cada
+búsqueda debe ser distinta pero coherente con el resto (mismo universo
+visual/atmósfera). Responde ÚNICAMENTE con JSON válido, sin texto adicional
+ni bloques de markdown."""
+
+STOCK_USER_TEMPLATE = """Genera {n_queries} búsquedas cortas de vídeo de stock para
+acompañar este tema musical.
+
+Artista: {artist}
+Título del tema: {track_title}
+Género/estilo: {genre}
+Contexto/concepto: {context}
+
+Devuelve un JSON con esta forma exacta:
+{{"queries": ["búsqueda corta en inglés 1", "búsqueda corta en inglés 2", "..."]}}
+"""
+
+
+def generate_stock_queries(artist, track_title, genre, context, n_queries=3):
+    """
+    Como generate_image_prompts(), pero para búsquedas de vídeo de stock:
+    términos cortos y concretos (algo que de verdad exista como metraje
+    filmado), no prompts elaborados de generación de imagen.
+    """
+    client = anthropic.Anthropic()
+
+    user_prompt = STOCK_USER_TEMPLATE.format(
+        n_queries=n_queries, artist=artist, track_title=track_title,
+        genre=genre, context=context,
+    )
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=500,
+        system=STOCK_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+
+    raw_text = "".join(
+        block.text for block in response.content if block.type == "text"
+    )
+    raw_text = raw_text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+
+    result = json.loads(raw_text)
+    return result["queries"]
+
+
 if __name__ == "__main__":
     import sys
 

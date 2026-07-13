@@ -135,20 +135,72 @@ def _maybe_master_audio(audio_path, memory):
     return out_path
 
 
+def _resolve_stock_video_covers(artist, title, genre, context, n_images, have_openai):
+    from src.stock_video import find_stock_clip
+    from src.image_prompts import generate_stock_queries
+
+    print("-> Generando búsquedas de vídeo de stock a partir del género/contexto...")
+    queries = generate_stock_queries(artist, title, genre, context, n_queries=n_images)
+    for i, q in enumerate(queries, start=1):
+        print(f"   {i}. {q}")
+
+    cover_dir = Path("input") / title.replace(" ", "_")
+    cover_dir.mkdir(parents=True, exist_ok=True)
+
+    covers = []
+    for i, query in enumerate(queries, start=1):
+        print(f"-> Buscando vídeo libre de derechos para: {query!r}...")
+        clip_path = str(cover_dir / f"{i:02d}.mp4")
+        result = find_stock_clip(query, clip_path)
+        if result:
+            print(f"   Encontrado: {clip_path}")
+            covers.append(clip_path)
+        elif have_openai:
+            print("   No encontrado, genero una imagen con IA en su lugar...")
+            fallback_prompt = generate_image_prompts(artist, title, genre, context, n_images=1)[0]
+            paths = generate_cover_images([fallback_prompt], str(cover_dir), start_index=i)
+            covers.append(paths[0])
+        else:
+            print("   No encontrado (y no hay OPENAI_API_KEY para generar una "
+                  "imagen de respaldo) — este hueco se queda sin portada.")
+
+    if not covers:
+        print("  No se consiguió ninguna portada por este camino.")
+        return ask_path(
+            "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
+            "(cada una tendrá su propio movimiento de cámara)"
+        )
+
+    print(f"   Portadas guardadas en: {cover_dir}")
+    return str(cover_dir)
+
+
 def _resolve_cover_interactive(artist, title, genre, context):
-    if not os.environ.get("OPENAI_API_KEY"):
+    have_openai = bool(os.environ.get("OPENAI_API_KEY"))
+    have_pexels = bool(os.environ.get("PEXELS_API_KEY"))
+
+    if not have_openai and not have_pexels:
         print(
-            "  (Nota: no tienes OPENAI_API_KEY en tu .env, así que no puedo "
-            "generar las portadas con IA. Añádela para activarlo la próxima vez.)"
+            "  (Nota: no tienes OPENAI_API_KEY ni PEXELS_API_KEY en tu .env, "
+            "así que no puedo generar/buscar portadas automáticamente. "
+            "Añade alguna para activarlo la próxima vez.)"
         )
         return ask_path(
             "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
             "(cada una tendrá su propio movimiento de cámara)"
         )
 
+    opciones = ["[t]engo las imágenes"]
+    if have_pexels:
+        opciones.append("[v]ídeo libre de derechos")
+    if have_openai:
+        opciones.append("[g]enerar con IA")
+    default_modo = "v" if have_pexels else "g"
+
     modo = ask(
-        "¿Ya tienes las imágenes de portada, o prefieres que las genere con "
-        "IA? [t]engo las imágenes / [g]enerar con IA", "g"
+        "¿Ya tienes las imágenes de portada, quieres que busque vídeo libre "
+        f"de derechos, o que las genere con IA? {' / '.join(opciones)}",
+        default_modo,
     ).strip().lower()
 
     if modo.startswith("t"):
@@ -158,9 +210,12 @@ def _resolve_cover_interactive(artist, title, genre, context):
         )
 
     n_images = int(ask(
-        "¿Cuántas imágenes generamos? (cada una tendrá su propio movimiento "
-        "de cámara en el vídeo)", "3"
+        "¿Cuántas portadas/clips generamos? (cada uno tendrá su propio "
+        "movimiento de cámara, o su propio movimiento real si es vídeo)", "3"
     ))
+
+    if modo.startswith("v") and have_pexels:
+        return _resolve_stock_video_covers(artist, title, genre, context, n_images, have_openai)
 
     print("-> Generando prompts de imagen a partir del género/contexto...")
     prompts = generate_image_prompts(artist, title, genre, context, n_images=n_images)

@@ -129,6 +129,22 @@ Configuración: añade `OPENAI_API_KEY=sk-...` a tu `.env` (crea una clave en
 python -m src.image_generator input/mi_tema "prompt de la primera portada" "prompt de la segunda"
 ```
 
+## Vídeo libre de derechos en vez de imágenes con movimiento (opcional)
+
+En vez de animar imágenes fijas con zoom/paneo, `src/stock_video.py` puede
+buscar y descargar clips de vídeo de verdad (movimiento real, no simulado)
+de bancos libres de uso comercial sin atribución — gratis, sin IA de pago.
+`subir_tema.py` lo ofrece como opción al elegir la portada; si no encuentra
+un clip que encaje para algún hueco, genera una imagen con IA en su lugar
+(si tienes `OPENAI_API_KEY`), sin interrumpir el proceso.
+
+Configuración: añade `PEXELS_API_KEY=...` a tu `.env` (clave gratuita,
+aprobación instantánea, en [pexels.com/api](https://www.pexels.com/api/)).
+
+Los Shorts, de momento, solo admiten imágenes fijas como portada — si la
+carpeta tiene alguna imagen además de clips de vídeo, se usa esa para los
+Shorts aunque el vídeo principal combine vídeo real e imágenes.
+
 ## Programar la publicación en YouTube
 
 Una vez tienes el vídeo principal y los Shorts de un tema en `output/`, hay

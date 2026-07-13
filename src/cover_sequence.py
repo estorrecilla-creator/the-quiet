@@ -65,6 +65,20 @@ def build_movement_chain(
     return f"{base},zoompan={zoompan_args},setsar=1"
 
 
+def build_video_clip_chain(w: int, h: int, duration: float, fps: int = 25) -> str:
+    """
+    Cadena de filtros para un segmento que ya es un clip de vídeo de
+    verdad (ej. de un banco de vídeo libre de derechos), no una imagen
+    estática: solo hace falta encuadrarlo al tamaño de salida y recortarlo
+    a la duración exacta del segmento (el propio movimiento ya lo trae el
+    clip, no necesita zoompan).
+    """
+    return (
+        f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+        f"fps={fps},trim=duration={duration:.3f},setpts=PTS-STARTPTS,setsar=1"
+    )
+
+
 def compute_segment_durations(total_duration: float, n_images: int, transition: float = TRANSITION_DURATION):
     """
     Duración "en bruto" que debe renderizarse por cada imagen para que,
@@ -88,6 +102,7 @@ def build_cover_sequence_filter(
     out_label: str = "cover",
     transition: float = TRANSITION_DURATION,
     use_transition: bool = True,
+    segment_types=None,
 ):
     """
     Genera el fragmento de filtro que aplica un movimiento distinto a cada
@@ -98,12 +113,22 @@ def build_cover_sequence_filter(
     solape de las transiciones) con `trim`+`tpad`, para que nunca quede ni
     un fotograma más corta ni más larga que el audio, evitando el
     desfase acumulado de la letra en temas con varias imágenes.
+
+    `segment_types`: lista opcional, uno por segmento — el nombre de un
+    movimiento de MOVEMENTS para una imagen estática, o "video" si ese
+    input ya es un clip de vídeo de verdad (ej. de un banco de vídeo
+    libre de derechos) al que solo hace falta encuadrar/recortar, sin
+    zoompan. Si no se pasa, se asume que todos son imágenes con
+    movimiento cíclico (comportamiento de siempre).
     """
     fragments = []
     seg_labels = []
     for i in range(n_images):
-        movement = MOVEMENTS[i % len(MOVEMENTS)]
-        chain = build_movement_chain(movement, w, h, durations[i], fps=fps)
+        seg_type = segment_types[i] if segment_types else MOVEMENTS[i % len(MOVEMENTS)]
+        if seg_type == "video":
+            chain = build_video_clip_chain(w, h, durations[i], fps=fps)
+        else:
+            chain = build_movement_chain(seg_type, w, h, durations[i], fps=fps)
         seg_label = f"seg{i}_{out_label}"
         fragments.append(f"[{input_offset + i}:v]{chain}[{seg_label}]")
         seg_labels.append(seg_label)

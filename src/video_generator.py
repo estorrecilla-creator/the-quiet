@@ -15,6 +15,7 @@ franja inferior (look estándar de canal de música/lyric-less video).
 
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 import soundfile as sf
@@ -23,15 +24,34 @@ from src.ffmpeg_utils import escape_path
 from src.star_light import build_star_script, STAR_SIZE
 from src.lyrics import srt_to_ass, subtitles_filter_fragment
 from src.person_mask import extract_person_cutout, blank_rgba_like
-from src.cover_sequence import build_cover_sequence_filter, compute_segment_durations
+from src.cover_sequence import build_cover_sequence_filter, compute_segment_durations, build_video_clip_chain, MOVEMENTS
 
 STAR_FPS = 12
 GLOW_ASSET = str(Path(__file__).resolve().parent.parent / "assets" / "glow.png")
+VIDEO_EXTENSIONS = (".mp4", ".mov", ".webm", ".mkv", ".m4v")
 
 
 def _get_audio_duration(audio_path: str) -> float:
     info = sf.info(audio_path)
     return info.frames / info.samplerate
+
+
+def _is_video_file(path: str) -> bool:
+    return Path(path).suffix.lower() in VIDEO_EXTENSIONS
+
+
+def _extract_reference_frame(video_path: str) -> str:
+    """
+    Saca un fotograma del clip para usarlo donde hace falta una imagen
+    fija (el contorno de la estrella, la detección de personas) — un
+    clip de vídeo no sirve directamente para eso.
+    """
+    out_path = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False).name
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", video_path, "-frames:v", "1", "-q:v", "2", out_path],
+        capture_output=True,
+    )
+    return out_path
 
 
 def generate_main_video(
@@ -65,8 +85,19 @@ def generate_main_video(
     wave_h = int(h * waveform_height_ratio)
 
     covers = list(cover_path) if isinstance(cover_path, (list, tuple)) else [cover_path]
+    covers_are_video = [_is_video_file(c) for c in covers]
+    # Un clip de vídeo no sirve directamente donde hace falta una imagen fija
+    # (contorno de la estrella, detección de personas) — se saca un
+    # fotograma de referencia para esos casos.
+    reference_images = [
+        _extract_reference_frame(c) if is_video else c
+        for c, is_video in zip(covers, covers_are_video)
+    ]
+    temp_reference_images = [
+        r for r, is_video in zip(reference_images, covers_are_video) if is_video
+    ]
 
-    star_script = build_star_script(audio_path, covers[0], w, h, fps=STAR_FPS)
+    star_script = build_star_script(audio_path, reference_images[0], w, h, fps=STAR_FPS)
     ass_path = None
     person_cutouts = None
     try:
@@ -76,20 +107,30 @@ def generate_main_video(
         idx = 1
 
         if len(covers) == 1:
-            zoom_chain = (
-                f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
-                f"scale=3840:2160,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,setsar=1"
-            )
-            input_args += ["-loop", "1", "-i", covers[0]]
-            cover_filter = f"[{idx}:v]{zoom_chain}[cover]"
+            if covers_are_video[0]:
+                total_duration = _get_audio_duration(audio_path)
+                chain = build_video_clip_chain(w, h, total_duration, fps=25)
+                input_args += ["-stream_loop", "-1", "-t", f"{total_duration:.3f}", "-i", covers[0]]
+            else:
+                chain = (
+                    f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+                    f"scale=3840:2160,zoompan=z='min(zoom+{zoom_speed},{zoom_max})':d=1:s={w}x{h}:fps=25,setsar=1"
+                )
+                input_args += ["-loop", "1", "-i", covers[0]]
+            cover_filter = f"[{idx}:v]{chain}[cover]"
             idx += 1
         else:
             total_duration = _get_audio_duration(audio_path)
             durations = compute_segment_durations(total_duration, len(covers))
-            for img, dur in zip(covers, durations):
-                input_args += ["-loop", "1", "-t", f"{dur:.3f}", "-i", img]
+            for img, dur, is_video in zip(covers, durations, covers_are_video):
+                if is_video:
+                    input_args += ["-stream_loop", "-1", "-t", f"{dur:.3f}", "-i", img]
+                else:
+                    input_args += ["-loop", "1", "-t", f"{dur:.3f}", "-i", img]
+            segment_types = ["video" if is_video else MOVEMENTS[i % len(MOVEMENTS)] for i, is_video in enumerate(covers_are_video)]
             cover_filter = build_cover_sequence_filter(
-                len(covers), durations, w, h, 25, input_offset=idx, out_label="cover"
+                len(covers), durations, w, h, 25, input_offset=idx, out_label="cover",
+                segment_types=segment_types,
             )
             idx += len(covers)
 
@@ -107,10 +148,13 @@ def generate_main_video(
             f"[coverstim][star]overlay=x=0:y=0[coverstar]"
         )
 
-        raw_cutouts = [extract_person_cutout(img) for img in covers]
+        raw_cutouts = [extract_person_cutout(img) for img in reference_images]
         base_label = "coverstar"
         if any(c is not None for c in raw_cutouts):
-            person_cutouts = [c if c else blank_rgba_like(img) for c, img in zip(raw_cutouts, covers)]
+            person_cutouts = [
+                c if c else blank_rgba_like(img)
+                for c, img in zip(raw_cutouts, reference_images)
+            ]
 
             person_idx = idx
             for cutout in person_cutouts:
@@ -175,6 +219,8 @@ def generate_main_video(
         if person_cutouts:
             for c in person_cutouts:
                 os.remove(c)
+        for r in temp_reference_images:
+            os.remove(r)
 
 
 if __name__ == "__main__":

@@ -28,21 +28,24 @@ from src.lyrics_align import resolve_lyrics_srt
 from src.cover_sequence import MOVEMENTS
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+VIDEO_EXTENSIONS = (".mp4", ".mov", ".webm", ".mkv", ".m4v")
+COVER_EXTENSIONS = IMAGE_EXTENSIONS + VIDEO_EXTENSIONS
 
 
 def resolve_cover(cover_arg):
     """
     Si `cover_arg` es una carpeta, devuelve la lista ordenada de imágenes
-    que contiene (cada una tendrá su propio movimiento de cámara en el
-    vídeo principal). Si es un archivo, lo devuelve tal cual.
+    y/o clips de vídeo que contiene (cada una tendrá su propio movimiento
+    de cámara en el vídeo principal, o su movimiento real si ya es un
+    clip). Si es un archivo, lo devuelve tal cual.
     """
     path = Path(cover_arg)
     if path.is_dir():
         images = sorted(
-            p for p in path.iterdir() if p.suffix.lower() in IMAGE_EXTENSIONS
+            p for p in path.iterdir() if p.suffix.lower() in COVER_EXTENSIONS
         )
         if not images:
-            raise ValueError(f"La carpeta {cover_arg} no contiene imágenes (.jpg/.png).")
+            raise ValueError(f"La carpeta {cover_arg} no contiene imágenes ni vídeos (.jpg/.png/.mp4...).")
         return [str(p) for p in images]
     return cover_arg
 
@@ -55,7 +58,14 @@ def process_track(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     cover = resolve_cover(cover_path)
-    cover_for_shorts = cover[0] if isinstance(cover, list) else cover
+    if isinstance(cover, list):
+        # los Shorts todavía solo admiten una imagen fija como portada, no
+        # un clip de vídeo; si hay alguna imagen en la lista, se prefiere
+        # esa para los Shorts aunque el vídeo principal use vídeo real.
+        images_only = [c for c in cover if Path(c).suffix.lower() in IMAGE_EXTENSIONS]
+        cover_for_shorts = images_only[0] if images_only else cover[0]
+    else:
+        cover_for_shorts = cover
 
     print(f"\n=== Procesando: {title} ===")
 
