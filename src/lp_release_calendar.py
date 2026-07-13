@@ -48,6 +48,30 @@ def build_lp_calendar(
     return calendar
 
 
+def build_lp_calendar_custom(entries, distrokid_lead_days: int = 30):
+    """
+    Para campañas con fechas irregulares (ej. varios singles de avance
+    antes de que salga el álbum completo, con temas fuera del orden
+    narrativo). `entries` es una lista de dicts, cada uno con al menos
+    `track` y `distrokid_release_date` (fecha en la que ese tema está
+    disponible en streaming), y opcionalmente `youtube_start_date` si es
+    distinta a la fecha de streaming (ej. varios temas que salen todos el
+    mismo día del álbum pero cuyo vídeo de YouTube se reparte en semanas
+    posteriores).
+    """
+    calendar = []
+    for entry in entries:
+        release_date = entry["distrokid_release_date"]
+        youtube_date = entry.get("youtube_start_date", release_date)
+        calendar.append({
+            "track": entry["track"],
+            "distrokid_submit_by": (release_date - timedelta(days=distrokid_lead_days)).isoformat(),
+            "distrokid_release_date": release_date.isoformat(),
+            "youtube_start_date": youtube_date.isoformat(),
+        })
+    return calendar
+
+
 def save_lp_calendar(calendar, out_path):
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
