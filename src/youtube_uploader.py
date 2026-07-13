@@ -55,8 +55,25 @@ def upload_video(
     tags: list[str],
     category_id: str = "10",  # 10 = Music
     privacy_status: str = "private",  # private | unlisted | public
+    publish_at: str = None,  # RFC3339 UTC, ej "2026-07-20T17:00:00Z"
 ):
+    """
+    Si se pasa `publish_at`, el vídeo se sube oculto y YouTube lo publica
+    automáticamente en esa fecha/hora exacta (UTC) sin que haga falta volver
+    a tocar nada. YouTube exige que `privacy_status` sea "private" para
+    poder programar la publicación, así que se fuerza automáticamente.
+    """
     youtube = _get_authenticated_service()
+
+    if publish_at:
+        privacy_status = "private"
+
+    status = {
+        "privacyStatus": privacy_status,
+        "selfDeclaredMadeForKids": False,
+    }
+    if publish_at:
+        status["publishAt"] = publish_at
 
     body = {
         "snippet": {
@@ -65,10 +82,7 @@ def upload_video(
             "tags": tags,
             "categoryId": category_id,
         },
-        "status": {
-            "privacyStatus": privacy_status,
-            "selfDeclaredMadeForKids": False,
-        },
+        "status": status,
     }
 
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True, mimetype="video/mp4")
@@ -82,7 +96,10 @@ def upload_video(
             print(f"Subiendo... {int(status.progress() * 100)}%")
 
     video_id = response["id"]
-    print(f"Subido como {privacy_status}: https://youtube.com/watch?v={video_id}")
+    if publish_at:
+        print(f"Subido (oculto) y programado para {publish_at}: https://youtube.com/watch?v={video_id}")
+    else:
+        print(f"Subido como {privacy_status}: https://youtube.com/watch?v={video_id}")
     return video_id
 
 

@@ -110,18 +110,37 @@ Por cada tema, en `output/<nombre_del_tema>/`:
 - `short_1.mp4`, `short_2.mp4`, ... — Shorts verticales de los mejores momentos
 - `short_N_metadata.json` — metadatos de cada Short
 
-Todo queda como **borrador local**. Tú revisas y subes manualmente (o usas
-`src/youtube_uploader.py` de forma independiente cuando quieras probar la
-subida automática en modo privado).
+Todo queda como **borrador local**. Tú revisas y subes manualmente, o usas
+`programar_youtube.py` para calendarizar y programar la subida automática
+a YouTube (ver más abajo).
 
-## Siguiente fase: subida automática
+## Programar la publicación en YouTube
 
-Cuando queráis activar la subida directa a YouTube:
-1. Sigue las instrucciones dentro de `src/youtube_uploader.py` (Google Cloud
-   Console, credenciales OAuth).
-2. Prueba primero con `privacy_status="private"`.
-3. Cuando confíes en el pipeline, añade la llamada a `upload_video()` al
-   final de `process_track()` en `main.py`.
+Una vez tienes el vídeo principal y los Shorts de un tema en `output/`, hay
+un asistente aparte para calendarizar y subir todo a YouTube ya programado
+(se publica solo, en la fecha y hora que elijas, sin tener que volver a
+tocar nada ese día).
+
+Configuración previa (una sola vez):
+1. Crea un proyecto en [Google Cloud Console](https://console.cloud.google.com).
+2. Activa "YouTube Data API v3".
+3. Crea credenciales OAuth 2.0 (tipo "Desktop app") y descarga el
+   `client_secret.json` → guárdalo en `config/client_secret.json` (esa
+   carpeta está en `.gitignore`, nunca se sube).
+4. La primera vez que subas algo se abrirá el navegador para autorizar la
+   cuenta del canal; después queda guardado en `config/token.json`.
+
+Uso:
+- Windows: doble clic en `programar_youtube.bat` (o crea un acceso directo
+  igual que con `subir_tema.bat`).
+- Terminal: `python programar_youtube.py` (o `venv/bin/python programar_youtube.py`).
+
+Te pedirá la carpeta de salida del tema (ej. `output/Mi_Tema`), la fecha y
+hora del primer envío (hora de España) y cada cuántos días quieres publicar
+el siguiente (vídeo principal primero, luego los Shorts). Te enseña el
+calendario propuesto y lo guarda en `calendario.json` dentro de esa carpeta
+**antes** de subir nada — puedes revisarlo o editarlo a mano. Solo sube y
+programa de verdad si confirmas explícitamente.
 
 ## Web app / uso desde el móvil (iPhone incluido)
 
