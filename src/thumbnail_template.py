@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-DEFAULT_FONT = str(Path(__file__).resolve().parent.parent / "assets" / "fonts" / "YoungSerif-Regular.ttf")
+DEFAULT_FONT = str(Path(__file__).resolve().parent.parent / "assets" / "fonts" / "Jura-Medium.ttf")
 
 
 def make_track_thumbnail(

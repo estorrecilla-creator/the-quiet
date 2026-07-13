@@ -11,3 +11,17 @@ Cómo usar cada carpeta con `subir_tema.py`:
 4. El resto del asistente (portadas, shorts, YouTube) funciona igual que siempre.
 
 Orden de publicación sugerido: el de la tabla del dossier (1 a 12), es el orden narrativo del álbum.
+
+## Decisiones cerradas (preguntas abiertas del dossier)
+
+- **Fechas del proyecto**: enero–agosto 2026.
+- **Idioma del canal de YouTube**: inglés.
+- **Portada definitiva**: `assets/portada_final.jpg` — la imagen aportada por
+  el usuario, con el nombre del álbum re-tipografiado en **Jura Medium**
+  (antes tenía una tipografía distinta a la del nombre del grupo). Es la
+  que se puede usar para el audio/DistroKid.
+- **Miniaturas de YouTube por tema**: se generan a partir de
+  `assets/portada_template.jpg` (la versión original, sin re-tipografiar)
+  con `src/thumbnail_template.py`, que sustituye el texto del álbum por el
+  título de cada tema — usa Jura Medium por defecto, coherente con la
+  portada final.
