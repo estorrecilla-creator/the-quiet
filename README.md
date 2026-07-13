@@ -157,6 +157,41 @@ calendario propuesto y lo guarda en `calendario.json` dentro de esa carpeta
 **antes** de subir nada — puedes revisarlo o editarlo a mano. Solo sube y
 programa de verdad si confirmas explícitamente.
 
+## Publicar en Facebook e Instagram
+
+`src/meta_uploader.py` ya está listo para publicar en una Página de
+Facebook y en la cuenta de Instagram (Business/Creator) vinculada a ella.
+No hace falta el ordenador para leer esto, pero sí para configurarlo:
+
+1. Crea una app en [developers.facebook.com](https://developers.facebook.com).
+2. Pide la revisión de los permisos `pages_show_list`,
+   `pages_read_engagement`, `pages_manage_posts` e
+   `instagram_content_publish`. **Esto puede tardar días** — conviene
+   pedirlo cuanto antes, aunque tardemos en usarlo.
+3. Vincula tu cuenta de Instagram (Business/Creator) a tu Página de
+   Facebook, desde la configuración de la Página.
+4. Genera un token de acceso de Página de larga duración (Graph API
+   Explorer → intercambio de token) y añade a tu `.env`:
+   `PAGE_ID`, `PAGE_ACCESS_TOKEN`, `IG_USER_ID`.
+
+Diferencias importantes frente a YouTube:
+- **Facebook sí soporta programar la publicación** (se sube ya, y Meta lo
+  publica solo en la fecha que le digas), igual que YouTube.
+- **Instagram no tiene programación nativa por API**: hay que llamar a la
+  función de publicar justo en el momento exacto en que quieres que salga.
+  Para eso hace falta algo que "despierte" en esa fecha (por ejemplo, el
+  Programador de tareas de Windows) y dispare la publicación entonces.
+- **Instagram no acepta un archivo local**: necesita una URL pública desde
+  la que descargar el vídeo, así que hay que alojarlo en algún sitio
+  (aunque sea temporalmente) antes de publicar. Es el paso que más se
+  puede complicar — lo resolvemos cuando lleguemos a esta parte.
+
+Uso de ejemplo (una vez configurado):
+```bash
+python -m src.meta_uploader facebook input/mi_video.mp4 "descripción del vídeo"
+python -m src.meta_uploader instagram https://tu-hosting.com/video.mp4 "caption del reel"
+```
+
 ## Web app / uso desde el móvil (iPhone incluido)
 
 Hay una interfaz web (`webapp.py`) para generar contenido desde el navegador
