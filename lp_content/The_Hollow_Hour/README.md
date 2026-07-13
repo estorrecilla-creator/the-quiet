@@ -25,3 +25,22 @@ Orden de publicación sugerido: el de la tabla del dossier (1 a 12), es el orden
   con `src/thumbnail_template.py`, que sustituye el texto del álbum por el
   título de cada tema — usa Jura Medium por defecto, coherente con la
   portada final.
+
+## Calendario de lanzamiento
+
+Estrategia: **singles escalonados**, un tema cada 14 días (quincenal),
+siempre en viernes (mejor para listas editoriales). El contenido de
+YouTube de cada tema no se publica hasta que ese tema ya esté disponible
+en streaming (para no "filtrarlo" antes). DistroKid necesita ~30 días de
+antelación antes de la fecha de lanzamiento — no tiene API pública, así
+que hay que subirlo a mano en esa fecha límite.
+
+Primer lanzamiento: **28 de agosto de 2026** (así que hay que subir el
+primer tema a DistroKid antes del **29 de julio de 2026** — muy pronto,
+solo si el primer tema ya está masterizado y listo para entonces; si no,
+hay que mover esta fecha hacia adelante).
+
+Calendario completo en `calendario_lanzamiento.json` (generado con
+`calendario_lp.py`). Con 14 días de cadencia, el tema 12 se lanzaría a
+finales de enero de 2027 — el tema 10 cae justo el 1 de enero (Año Nuevo),
+puede convenir moverlo un par de días si se acerca esa fecha.
