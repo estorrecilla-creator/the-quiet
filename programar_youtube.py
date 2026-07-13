@@ -55,6 +55,16 @@ def ask(prompt, default=None, required=True):
         print("  Este dato es obligatorio.")
 
 
+def ask_path(prompt, required=True):
+    while True:
+        value = ask(prompt, required=required)
+        if not value:
+            return None
+        if Path(value).expanduser().exists():
+            return str(Path(value).expanduser())
+        print(f"  No encuentro el archivo: {value}")
+
+
 def main():
     print("=== Programar publicación en YouTube ===\n")
 
@@ -107,12 +117,25 @@ def main():
         required=False,
     )
 
+    thumb_template = ask_path(
+        "Ruta a una plantilla de miniatura (portada del LP con el logo; se "
+        "le sustituye el texto del álbum por el título del tema; Enter para "
+        "usar en su lugar un fotograma del vídeo)",
+        required=False,
+    )
+    track_title = Path(out_dir).name.replace("_", " ")
+
     from src.youtube_uploader import upload_video
 
     schedule = load_schedule(out_dir)  # por si se editó a mano
     for item in schedule:
         print(f"\n-> Subiendo {Path(item['video_path']).name} (programado para {item['publish_at_local']})...")
-        thumbnail_path = _extract_thumbnail(item["video_path"]) if item["kind"] == "main" else None
+        if thumb_template:
+            thumb_out = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False).name
+            from src.thumbnail_template import make_track_thumbnail
+            thumbnail_path = make_track_thumbnail(thumb_template, track_title, thumb_out)
+        else:
+            thumbnail_path = _extract_thumbnail(item["video_path"]) if item["kind"] == "main" else None
         try:
             upload_video(
                 video_path=item["video_path"],
