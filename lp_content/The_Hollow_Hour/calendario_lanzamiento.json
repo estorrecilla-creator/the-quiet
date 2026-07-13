@@ -1,5 +1,11 @@
 [
   {
+    "track": "7. The Light I Left On",
+    "distrokid_submit_by": "2026-07-22",
+    "distrokid_release_date": "2026-08-21",
+    "youtube_start_date": "2026-08-21"
+  },
+  {
     "track": "10. Static Between Hands (Reprise)",
     "distrokid_submit_by": "2026-07-29",
     "distrokid_release_date": "2026-08-28",
@@ -48,27 +54,21 @@
     "youtube_start_date": "2026-10-23"
   },
   {
-    "track": "7. The Light I Left On",
+    "track": "8. Tape Loop for a Tired Name",
     "distrokid_submit_by": "2026-08-19",
     "distrokid_release_date": "2026-09-18",
     "youtube_start_date": "2026-10-30"
   },
   {
-    "track": "8. Tape Loop for a Tired Name",
+    "track": "11. The Room Forgets Its Shape",
     "distrokid_submit_by": "2026-08-19",
     "distrokid_release_date": "2026-09-18",
     "youtube_start_date": "2026-11-06"
   },
   {
-    "track": "11. The Room Forgets Its Shape",
-    "distrokid_submit_by": "2026-08-19",
-    "distrokid_release_date": "2026-09-18",
-    "youtube_start_date": "2026-11-13"
-  },
-  {
     "track": "12. Room Before the Word (Return)",
     "distrokid_submit_by": "2026-08-19",
     "distrokid_release_date": "2026-09-18",
-    "youtube_start_date": "2026-11-20"
+    "youtube_start_date": "2026-11-13"
   }
 ]

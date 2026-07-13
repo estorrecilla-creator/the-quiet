@@ -30,15 +30,16 @@ Orden de publicación sugerido: el de la tabla del dossier (1 a 12), es el orden
 
 Estrategia final (todo en viernes, mejor para listas editoriales):
 
-1. **3 singles de avance** (fuera del orden narrativo, elegidos como
-   "ganchos"): tema 10 (28 ago), tema 9 (4 sep), tema 2 (11 sep).
+1. **4 singles de avance** (fuera del orden narrativo, elegidos como
+   "ganchos"): **tema 7 — single principal/lead** (21 ago), tema 10 (28
+   ago), tema 9 (4 sep), tema 2 (11 sep).
 2. **Álbum completo el 18 de septiembre de 2026** — todos los temas
    quedan disponibles en streaming ese día. **Ese día no se sube ningún
    vídeo nuevo a YouTube**: se reserva para redirigir tráfico a
    Spotify/streaming (actualizar descripciones/comentario fijado de los
    singles ya publicados con el enlace al álbum completo — manual, ver
    sección de YouTube del README principal).
-3. **Los 9 temas restantes**, en orden narrativo, 1 vídeo principal a la
+3. **Los 8 temas restantes**, en orden narrativo, 1 vídeo principal a la
    semana empezando el 25 de septiembre (la semana siguiente al álbum).
 4. **Shorts**: para que salgan a ritmo de 2-3 por semana en vez de todos
    de golpe, al ejecutar `programar_youtube.py` para cada tema pon el
@@ -49,9 +50,12 @@ DistroKid necesita ~30 días de antelación antes de cada fecha de
 lanzamiento — no tiene API pública, así que hay que subirlo a mano en la
 fecha límite (columna `distrokid_submit_by` del calendario).
 
-**Aviso**: la primera fecha límite de DistroKid es el **29 de julio de
-2026** — muy pronto, solo válido si el primer tema (el 10) ya está
-masterizado y listo para entonces. Si no, avisa y recalculamos con una
-fecha de inicio más realista.
+**⚠️ Aviso importante**: la primera fecha límite de DistroKid (para el
+tema 7, el single principal) es el **22 de julio de 2026** — solo 9 días
+desde hoy (13 de julio). Es muy poco margen para tener el tema
+masterizado, con portada y todo listo para subir. Si no va a estar listo
+a tiempo, dilo cuanto antes y recalculamos todo el calendario con una
+fecha de inicio más realista — mejor mover las fechas ahora que tener
+que retrasar un lanzamiento ya anunciado.
 
 Calendario completo en `calendario_lanzamiento.json`.
