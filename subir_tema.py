@@ -1,14 +1,16 @@
 """
 subir_tema.py — asistente interactivo.
 
-Te hace unas preguntas (audio, portada, artista, título, género, contexto) y
-genera el vídeo principal, los Shorts y los metadatos, sin que tengas que
-recordar los parámetros de main.py.
+Detecta solo los audios que hay en input/, recuerda artista/género/contexto
+de la vez anterior (config/asistente_memoria.json) y genera el vídeo
+principal, los Shorts y los metadatos, sin que tengas que recordar los
+parámetros de main.py ni volver a escribir siempre lo mismo.
 
 Uso:
     python subir_tema.py
 """
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -27,6 +29,23 @@ if not os.environ.get("ANTHROPIC_API_KEY"):
 from main import process_track
 from src.image_prompts import generate_image_prompts
 from src.image_generator import generate_cover_images
+
+MEMORY_PATH = Path("config") / "asistente_memoria.json"
+AUDIO_EXTENSIONS = (".mp3", ".wav")
+
+
+def _load_memory():
+    if MEMORY_PATH.exists():
+        try:
+            return json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+    return {}
+
+
+def _save_memory(memory):
+    MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    MEMORY_PATH.write_text(json.dumps(memory, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _strip_quotes(value):
@@ -55,6 +74,38 @@ def ask_path(prompt, required=True):
         if Path(value).expanduser().exists():
             return str(Path(value).expanduser())
         print(f"  No encuentro el archivo: {value}")
+
+
+def _find_audio_files():
+    input_dir = Path("input")
+    if not input_dir.is_dir():
+        return []
+    return sorted(
+        p for p in input_dir.rglob("*")
+        if p.is_file() and p.suffix.lower() in AUDIO_EXTENSIONS
+    )
+
+
+def _pick_audio():
+    files = _find_audio_files()
+    if not files:
+        print("  No encuentro ningún .mp3/.wav dentro de input/.")
+        return ask_path("Ruta al audio (mp3/wav)")
+
+    if len(files) == 1:
+        print(f"-> Audio detectado en input/: {files[0]}")
+        return str(files[0])
+
+    print("Varios audios encontrados en input/:")
+    for i, f in enumerate(files, start=1):
+        print(f"   {i}. {f}")
+    while True:
+        raw = _strip_quotes(input(f"Elige uno [1-{len(files)}] (o pega otra ruta): ").strip())
+        if raw.isdigit() and 1 <= int(raw) <= len(files):
+            return str(files[int(raw) - 1])
+        if raw and Path(raw).expanduser().exists():
+            return str(Path(raw).expanduser())
+        print("  Opción no válida.")
 
 
 def _resolve_cover_interactive(artist, title, genre, context):
@@ -99,11 +150,17 @@ def _resolve_cover_interactive(artist, title, genre, context):
 def main():
     print("=== Telvorn Automation — asistente ===\n")
 
-    audio = ask_path("Ruta al audio (mp3/wav)")
-    artist = ask("Artista")
-    title = ask("Título del tema")
-    genre = ask("Género/estilo")
-    context = ask("Contexto/concepto del tema")
+    audio = _pick_audio()
+    memory = _load_memory()
+
+    artist = ask("Artista", memory.get("artist"))
+    title = ask("Título del tema", Path(audio).stem)
+    genre = ask("Género/estilo", memory.get("genre"))
+    context = ask("Contexto/concepto del tema", memory.get("context"))
+
+    memory.update({"artist": artist, "genre": genre, "context": context})
+    _save_memory(memory)
+
     cover = _resolve_cover_interactive(artist, title, genre, context)
     shorts = int(ask("Número de Shorts a generar", "3"))
     lyrics = ask_path(
