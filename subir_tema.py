@@ -32,6 +32,7 @@ from src.image_generator import generate_cover_images
 
 MEMORY_PATH = Path("config") / "asistente_memoria.json"
 AUDIO_EXTENSIONS = (".mp3", ".wav")
+VIDEO_EXTENSIONS = (".mp4", ".mov", ".webm", ".mkv", ".m4v")
 
 
 def _load_memory():
@@ -135,7 +136,26 @@ def _maybe_master_audio(audio_path, memory):
     return out_path
 
 
-def _resolve_stock_video_covers(artist, title, genre, context, n_images, have_openai, orientation="landscape"):
+def _suggest_clip_count(audio_path, target_seconds=25, max_clips=15, min_clips=3):
+    """
+    Cuantos clips hacen falta para cubrir la duración del tema sin que
+    ninguno tenga que repetirse en bucle muchas veces — cuanto más largo
+    el tema, más clips (hasta `max_clips`), en vez de forzar siempre el
+    mismo número por defecto.
+    """
+    try:
+        import soundfile as sf
+        info = sf.info(audio_path)
+        duration = info.frames / info.samplerate
+    except Exception:
+        return min_clips
+    return max(min_clips, min(max_clips, round(duration / target_seconds)))
+
+
+def _resolve_stock_video_covers(
+    artist, title, genre, context, n_images, have_openai, orientation="landscape",
+    min_duration=4.0, homogenize=False,
+):
     from src.stock_video import find_stock_clip
     from src.image_prompts import generate_stock_queries
 
@@ -153,7 +173,7 @@ def _resolve_stock_video_covers(artist, title, genre, context, n_images, have_op
     for i, query in enumerate(queries, start=1):
         print(f"-> Buscando vídeo libre de derechos ({orientation}) para: {query!r}...")
         clip_path = str(cover_dir / f"{i:02d}.mp4")
-        result = find_stock_clip(query, clip_path, orientation=orientation)
+        result = find_stock_clip(query, clip_path, orientation=orientation, min_duration=min_duration)
         if result:
             print(f"   Encontrado: {clip_path}")
             covers.append(clip_path)
@@ -170,11 +190,19 @@ def _resolve_stock_video_covers(artist, title, genre, context, n_images, have_op
         print("  No se consiguió ninguna portada por este camino.")
         return None
 
+    if homogenize:
+        video_covers = [c for c in covers if Path(c).suffix.lower() in VIDEO_EXTENSIONS]
+        if len(video_covers) >= 2:
+            print(f"-> Homogeneizando brillo/color entre los {len(video_covers)} clips "
+                  "para que el cambio de uno a otro se note menos...")
+            from src.color_match import homogenize_clips
+            homogenize_clips(video_covers)
+
     print(f"   Portadas guardadas en: {cover_dir}")
     return str(cover_dir)
 
 
-def _resolve_cover_interactive(artist, title, genre, context):
+def _resolve_cover_interactive(artist, title, genre, context, audio_path):
     have_openai = bool(os.environ.get("OPENAI_API_KEY"))
     have_pexels = bool(os.environ.get("PEXELS_API_KEY"))
 
@@ -210,15 +238,17 @@ def _resolve_cover_interactive(artist, title, genre, context):
         )
         return cover, None
 
-    n_images = int(ask(
-        "¿Cuántas portadas/clips generamos para el vídeo principal? (cada "
-        "uno tendrá su propio movimiento de cámara, o su propio movimiento "
-        "real si es vídeo)", "3"
-    ))
-
     if modo.startswith("v") and have_pexels:
+        suggested_n = _suggest_clip_count(audio_path)
+        n_images = int(ask(
+            "¿Cuántos clips de vídeo buscamos para el vídeo principal? Cuantos "
+            "más, menos se nota el bucle en temas largos — para la duración de "
+            f"este tema sugiero unos {suggested_n} (podemos usar 10-15 sin "
+            "problema si hace falta)", str(suggested_n)
+        ))
         cover = _resolve_stock_video_covers(
-            artist, title, genre, context, n_images, have_openai, orientation="landscape"
+            artist, title, genre, context, n_images, have_openai, orientation="landscape",
+            min_duration=8.0, homogenize=True,
         )
         if cover is None:
             cover = ask_path(
@@ -233,6 +263,10 @@ def _resolve_cover_interactive(artist, title, genre, context):
         )
         return cover, shorts_cover
 
+    n_images = int(ask(
+        "¿Cuántas imágenes generamos? (cada una tendrá su propio movimiento "
+        "de cámara)", "3"
+    ))
     print("-> Generando prompts de imagen a partir del género/contexto...")
     prompts = generate_image_prompts(artist, title, genre, context, n_images=n_images)
     for i, p in enumerate(prompts, start=1):
@@ -262,7 +296,7 @@ def main():
     memory.update({"artist": artist, "genre": genre, "context": context})
     _save_memory(memory)
 
-    cover, shorts_cover_override = _resolve_cover_interactive(artist, title, genre, context)
+    cover, shorts_cover_override = _resolve_cover_interactive(artist, title, genre, context, audio)
     shorts = int(ask("Número de Shorts a generar", "3"))
     lyrics = ask_path(
         "Ruta a la letra (.srt ya sincronizado, o .txt en texto plano para "

@@ -157,6 +157,22 @@ Si no tienes `PEXELS_API_KEY` o no se encuentra un clip vertical, el
 asistente cae en generar una imagen con IA o en reutilizar la primera
 imagen fija del vídeo principal, sin interrumpir el proceso.
 
+### Vídeo principal: sin bucles visibles y color homogéneo
+
+Para el vídeo principal (que puede durar varios minutos), un único clip
+corto repitiéndose en bucle se nota mucho. El asistente sugiere
+automáticamente cuántos clips buscar según la duración del tema (hasta 15),
+para que cada uno cubra un tramo razonable sin loop evidente — puedes
+subir ese número a mano si aun así se nota. También exige clips de al
+menos 8s (en vez de 4s) para el vídeo principal.
+
+Como los clips vienen de fuentes distintas, cada uno trae su propia
+exposición/color. `src/color_match.py` analiza el brillo medio de todos
+los clips descargados y corrige cada uno hacia un punto medio común
+(`eq=brightness` + saturación fija), para que el salto de un clip a otro
+se note menos — además de las transiciones (fundidos, barridos...) que ya
+había entre cada dos.
+
 ## Programar la publicación en YouTube
 
 Una vez tienes el vídeo principal y los Shorts de un tema en `output/`, hay
