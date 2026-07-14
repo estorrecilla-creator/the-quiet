@@ -35,7 +35,10 @@ def trim_silence(audio_path: str, out_path: str, threshold_db: float = -50.0) ->
         "areverse"
     )
     subprocess.run(
-        ["ffmpeg", "-y", "-i", audio_path, "-af", filt, out_path],
+        # pcm_s24le explícito: sin esto, ffmpeg vuelca el WAV de salida a
+        # 16 bits por defecto aunque la entrada sea de 24 (o más), perdiendo
+        # resolución del máster en cada paso de la cadena sin avisar.
+        ["ffmpeg", "-y", "-i", audio_path, "-af", filt, "-c:a", "pcm_s24le", out_path],
         capture_output=True,
     )
     return out_path
@@ -119,7 +122,7 @@ def denoise_if_needed(audio_path: str, out_path: str) -> tuple:
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
-        ["ffmpeg", "-y", "-i", audio_path, "-af", f"afftdn=nr={DENOISE_STRENGTH_DB}", out_path],
+        ["ffmpeg", "-y", "-i", audio_path, "-af", f"afftdn=nr={DENOISE_STRENGTH_DB}", "-c:a", "pcm_s24le", out_path],
         capture_output=True,
     )
     return out_path, True, noise_floor_db

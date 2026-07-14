@@ -35,6 +35,8 @@ from mutagen.id3 import (
     TEXT,
     TIT2,
     TPE1,
+    TPE2,
+    TPOS,
     TPUB,
     TRCK,
     TXXX,
@@ -43,19 +45,32 @@ from mutagen.mp3 import MP3
 from mutagen.wave import WAVE
 
 
+def _format_pair(number, total):
+    if number is None:
+        return None
+    return f"{number}/{total}" if total else str(number)
+
+
 def _id3_frames(
-    title, artist, album, genre, year, track_number, composer,
-    lyricist, producer, publisher, copyright_text, phonographic_copyright,
+    title, artist, album, album_artist, genre, year, track_number, total_tracks,
+    disc_number, total_discs, composer, lyricist, producer, publisher,
+    copyright_text, phonographic_copyright,
 ):
     frames = [TIT2(encoding=3, text=title), TPE1(encoding=3, text=artist)]
     if album:
         frames.append(TALB(encoding=3, text=album))
+    if album_artist:
+        frames.append(TPE2(encoding=3, text=album_artist))
     if genre:
         frames.append(TCON(encoding=3, text=genre))
     if year:
         frames.append(TDRC(encoding=3, text=str(year)))
-    if track_number:
-        frames.append(TRCK(encoding=3, text=str(track_number)))
+    track_text = _format_pair(track_number, total_tracks)
+    if track_text:
+        frames.append(TRCK(encoding=3, text=track_text))
+    disc_text = _format_pair(disc_number, total_discs)
+    if disc_text:
+        frames.append(TPOS(encoding=3, text=disc_text))
     if composer:
         frames.append(TCOM(encoding=3, text=composer))
     if lyricist:
@@ -76,9 +91,13 @@ def clean_audio_metadata(
     title: str,
     artist: str,
     album: str = None,
+    album_artist: str = None,
     genre: str = None,
     year: int = None,
     track_number: int = None,
+    total_tracks: int = None,
+    disc_number: int = 1,
+    total_discs: int = 1,
     composer: str = None,
     lyricist: str = None,
     producer: str = None,
@@ -89,13 +108,16 @@ def clean_audio_metadata(
     """
     Borra todos los metadatos existentes del archivo y escribe unos
     limpios con los datos que se pasen (los campos opcionales que no se
-    den, simplemente no se escriben). Modifica el archivo in-place y
-    devuelve la misma ruta. Funciona con .mp3 y .wav.
+    den, simplemente no se escriben). `disc_number`/`total_discs` valen
+    1/1 por defecto (LP de un solo disco); pasa `disc_number=None` para
+    omitir el campo del todo. Modifica el archivo in-place y devuelve la
+    misma ruta. Funciona con .mp3 y .wav.
     """
     suffix = Path(audio_path).suffix.lower()
     frames = _id3_frames(
-        title, artist, album, genre, year, track_number, composer, lyricist,
-        producer, publisher, copyright_text, phonographic_copyright,
+        title, artist, album, album_artist, genre, year, track_number, total_tracks,
+        disc_number, total_discs, composer, lyricist, producer, publisher,
+        copyright_text, phonographic_copyright,
     )
 
     if suffix == ".mp3":
@@ -118,8 +140,9 @@ def clean_audio_metadata(
             riff_tags["genre"] = genre
         if year:
             riff_tags["date"] = str(year)
-        if track_number:
-            riff_tags["track"] = str(track_number)
+        track_text = _format_pair(track_number, total_tracks)
+        if track_text:
+            riff_tags["track"] = track_text
         if copyright_text:
             riff_tags["copyright"] = copyright_text
 

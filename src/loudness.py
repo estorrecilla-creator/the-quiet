@@ -74,7 +74,9 @@ def normalize_loudness(audio_path: str, out_path: str, sample_rate: int = TARGET
         loudnorm_filter = f"loudnorm=I={TARGET_I}:TP={TARGET_TP}:LRA={TARGET_LRA}:print_format=summary"
 
     subprocess.run(
-        ["ffmpeg", "-y", "-i", audio_path, "-af", loudnorm_filter, "-ar", str(sample_rate), out_path],
+        # pcm_s24le explícito: sin esto, ffmpeg vuelca el WAV de salida a
+        # 16 bits por defecto aunque la entrada sea de 24 (o más).
+        ["ffmpeg", "-y", "-i", audio_path, "-af", loudnorm_filter, "-ar", str(sample_rate), "-c:a", "pcm_s24le", out_path],
         capture_output=True,
     )
     return out_path

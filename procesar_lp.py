@@ -101,7 +101,7 @@ def _find_audio_files(folder):
     )
 
 
-def _prepare_audio(audio_path, reference_path, *, title, artist, album=None, genre=None, track_number=None):
+def _prepare_audio(audio_path, reference_path, *, title, artist, album=None, genre=None, track_number=None, total_tracks=None):
     from src.mastering import master_audio
     from src.audio_hygiene import trim_silence, check_mono_compatibility, denoise_if_needed
     from src.loudness import normalize_loudness, TARGET_I
@@ -143,8 +143,8 @@ def _prepare_audio(audio_path, reference_path, *, title, artist, album=None, gen
     publisher = os.environ.get("RELEASE_PUBLISHER", artist)
     copyright_holder = os.environ.get("RELEASE_COPYRIGHT_HOLDER", artist)
     clean_audio_metadata(
-        final_path, title=title, artist=artist, album=album, genre=genre,
-        year=year, track_number=track_number,
+        final_path, title=title, artist=artist, album=album, album_artist=artist, genre=genre,
+        year=year, track_number=track_number, total_tracks=total_tracks,
         composer=artist, lyricist=artist, producer=publisher, publisher=publisher,
         copyright_text=f"© {year} {copyright_holder}",
         phonographic_copyright=f"℗ {year} {copyright_holder}",
@@ -362,7 +362,7 @@ def main():
             prepared_audio = _prepare_audio(
                 str(audio_path), reference_path,
                 title=track["title"], artist=artist, album=lp_title, genre=genre,
-                track_number=track["number"],
+                track_number=track["number"], total_tracks=len(pairs),
             )
 
             cover, shorts_cover = _resolve_cover_unattended(

@@ -408,7 +408,7 @@ def main():
     publisher = os.environ.get("RELEASE_PUBLISHER", artist)
     copyright_holder = os.environ.get("RELEASE_COPYRIGHT_HOLDER", artist)
     clean_audio_metadata(
-        audio, title=title, artist=artist, genre=genre, year=year,
+        audio, title=title, artist=artist, album_artist=artist, genre=genre, year=year,
         composer=artist, lyricist=artist, producer=publisher, publisher=publisher,
         copyright_text=f"© {year} {copyright_holder}",
         phonographic_copyright=f"℗ {year} {copyright_holder}",

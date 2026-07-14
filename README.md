@@ -203,20 +203,26 @@ anterior):
    último paso): borra TODOS los metadatos que traiga el archivo —
    título, artista, comentarios, cualquier ID de generación o rastro de
    la herramienta usada para componerlo (Suno u otra) — y escribe en su
-   lugar los correctos y limpios: título, artista, álbum/número de pista
-   (si vienes de `procesar_lp.py`), género, año, compositor, letrista,
-   productor, editorial, copyright y copyright fonográfico (℗). Un .wav
-   guarda metadatos de dos formas distintas que ninguna herramienta lee
-   todas (el chunk RIFF "LIST INFO" clásico, el que entienden el
-   Explorador de Windows y la mayoría de comprobadores sencillos; y un
-   chunk ID3v2 embebido, el que entienden ffprobe y muchos DAW/
-   distribuidores) — se escriben las dos, y ambas se borran primero por
-   completo para no dejar pasar ningún rastro que ya trajera el archivo.
-   Productor/editorial/copyright salen de `RELEASE_PUBLISHER` y
-   `RELEASE_COPYRIGHT_HOLDER` en tu `.env` (si no los pones, se usa el
-   nombre del artista). Este es el archivo final de verdad: el que se usa
-   para generar los vídeos y el que puedes subir a DistroKid, sin ningún
-   rastro de cómo se hizo.
+   lugar los correctos y limpios: título, artista, álbum, artista del
+   álbum, número de pista/total (si vienes de `procesar_lp.py`, ej.
+   "3/12"), número de disco (1/1 por defecto), género, año, compositor,
+   letrista, productor, editorial, copyright y copyright fonográfico (℗).
+   Un .wav guarda metadatos de dos formas distintas que ninguna
+   herramienta lee todas (el chunk RIFF "LIST INFO" clásico, el que
+   entienden el Explorador de Windows y la mayoría de comprobadores
+   sencillos; y un chunk ID3v2 embebido, el que entienden ffprobe y
+   muchos DAW/distribuidores, con más campos disponibles) — se escriben
+   las dos, y ambas se borran primero por completo para no dejar pasar
+   ningún rastro que ya trajera el archivo. Productor/editorial/copyright
+   salen de `RELEASE_PUBLISHER` y `RELEASE_COPYRIGHT_HOLDER` en tu `.env`
+   (si no los pones, se usa el nombre del artista). Este es el archivo
+   final de verdad: el que se usa para generar los vídeos y el que puedes
+   subir a DistroKid, sin ningún rastro de cómo se hizo.
+
+   Los tres pasos anteriores (recorte de silencio, reducción de ruido y
+   normalización) conservan el bit depth original del máster (24 bits si
+   viene de Matchering) — sin fijarlo explícitamente, ffmpeg vuelca a 16
+   bits por defecto en cada paso aunque la entrada sea de más calidad.
 
 ## Generar las portadas con IA (opcional)
 
