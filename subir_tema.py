@@ -132,7 +132,26 @@ def _maybe_master_audio(audio_path, memory):
     print("-> Masterizando con Matchering (puede tardar un minuto)...")
     master_audio(audio_path, reference, out_path)
     print(f"   Audio masterizado guardado en: {out_path}")
-    print("   (Este mismo archivo es el que puedes subir a DistroKid.)")
+    return out_path
+
+
+def _normalize_loudness_step(audio_path):
+    """
+    Siempre se aplica (no hace falta elegir nada): lleva el volumen final
+    al estándar de YouTube/streaming (-14 LUFS) para que ningún tema del
+    canal suene más flojo o más fuerte que el resto. Se hace después de
+    la masterización opcional, que ajusta tono/color pero no garantiza un
+    LUFS exacto.
+    """
+    from src.loudness import normalize_loudness, TARGET_I
+    normalized_dir = Path("normalized")
+    normalized_dir.mkdir(exist_ok=True)
+    out_path = str(normalized_dir / f"{Path(audio_path).stem}_normalized.wav")
+    print(f"-> Normalizando el volumen a {TARGET_I} LUFS (estándar de YouTube/streaming)...")
+    normalize_loudness(audio_path, out_path)
+    print(f"   Audio con volumen normalizado guardado en: {out_path}")
+    print("   (Este es el archivo final: el que se usa para generar los vídeos "
+          "y el que puedes subir a DistroKid.)")
     return out_path
 
 
@@ -287,6 +306,7 @@ def main():
     memory = _load_memory()
 
     audio = _maybe_master_audio(audio, memory)
+    audio = _normalize_loudness_step(audio)
 
     artist = ask("Artista", memory.get("artist"))
     title = ask("Título del tema", suggested_title)

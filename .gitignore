@@ -6,6 +6,7 @@ config/asistente_memoria.json
 output/
 uploads/
 mastered/
+normalized/
 input/*
 !input/.gitkeep
 __pycache__/

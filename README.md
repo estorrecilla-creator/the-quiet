@@ -114,6 +114,27 @@ Todo queda como **borrador local**. Tú revisas y subes manualmente, o usas
 `programar_youtube.py` para calendarizar y programar la subida automática
 a YouTube (ver más abajo).
 
+## Preparación del audio (automática, dentro de `subir_tema.py`)
+
+Antes de generar nada, `subir_tema.py` deja el audio en su mejor estado
+posible en dos pasos:
+
+1. **Masterización opcional** (`src/mastering.py`, con
+   [Matchering](https://github.com/sergree/matchering) — gratis, local, de
+   código abierto): te pregunta si quieres masterizar contra una canción
+   de referencia con el sonido que buscas. Ajusta ecualización y volumen
+   para parecerse a esa referencia, sin tocar el contenido de la canción
+   (no corta ni reordena nada). Se guarda en `mastered/`.
+2. **Normalización de volumen** (`src/loudness.py`) — esta **siempre** se
+   aplica, no hay que elegir nada: lleva el volumen final a -14 LUFS (el
+   estándar que usan YouTube y Spotify), con un límite de pico real de
+   -1 dBTP para no recortar. Sin esto, un tema más flojo o más fuerte que
+   el resto de tu catálogo suena descompensado al pasar de un vídeo a
+   otro del mismo canal. Se aplica después de la masterización opcional
+   (que ajusta tono/color, pero no garantiza un LUFS exacto) y se guarda
+   en `normalized/` — ese es el archivo final: el que se usa para generar
+   los vídeos y el que puedes subir a DistroKid.
+
 ## Generar las portadas con IA (opcional)
 
 Si no quieres crear las portadas a mano, `src/image_generator.py` las genera
