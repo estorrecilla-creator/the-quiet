@@ -53,6 +53,7 @@ def resolve_cover(cover_arg):
 def process_track(
     audio_path, cover_path, artist, title, genre, context, n_shorts, out_dir,
     lyrics_path=None, lyrics_offset=0.0, shorts_cover_override=None,
+    watermark_logo_path=None,
 ):
     out_dir = Path(out_dir) / title.replace(" ", "_")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -96,7 +97,7 @@ def process_track(
         main_video_path = out_dir / "main_video.mp4"
         generate_main_video(
             audio_path, cover, str(main_video_path), lyrics_path=lyrics_srt,
-            lyrics_offset=lyrics_offset,
+            lyrics_offset=lyrics_offset, track_title=title,
         )
 
         print("-> Generando metadatos del vídeo principal...")
@@ -116,6 +117,8 @@ def process_track(
                 movement=MOVEMENTS[(i - 1) % len(MOVEMENTS)],
                 lyrics_path=lyrics_srt,
                 lyrics_offset=lyrics_offset,
+                track_title=title,
+                watermark_logo_path=watermark_logo_path,
             )
 
             short_meta = generate_metadata(artist, title, genre, context, content_type="short")
@@ -166,6 +169,16 @@ def main():
             "la deja algo desfasada. Ej: -3 si sale 3s tarde."
         ),
     )
+    parser.add_argument(
+        "--watermark-logo",
+        help=(
+            "Ruta a un logo en PNG con fondo transparente, para quemarlo "
+            "junto al nombre del tema en la esquina superior izquierda de "
+            "los Shorts (el vídeo principal lleva solo el nombre del tema; "
+            "el logo ahí lo pone el watermark de canal de YouTube, ver "
+            "configurar_marca_agua.py). Opcional."
+        ),
+    )
     args = parser.parse_args()
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -181,6 +194,7 @@ def main():
             args.audio, args.cover, args.artist, args.title,
             args.genre, args.context, args.shorts, args.out,
             lyrics_path=args.lyrics, lyrics_offset=args.lyrics_offset,
+            watermark_logo_path=args.watermark_logo,
         )
     elif args.album_dir:
         tracks = sorted(Path(args.album_dir).glob("*.mp3")) + sorted(Path(args.album_dir).glob("*.wav"))
@@ -190,6 +204,7 @@ def main():
                 str(track_path), args.cover, args.artist, track_title,
                 args.genre, args.context, args.shorts, args.out,
                 lyrics_offset=args.lyrics_offset,
+                watermark_logo_path=args.watermark_logo,
             )
     else:
         parser.error("Debes indicar --audio o --album-dir")

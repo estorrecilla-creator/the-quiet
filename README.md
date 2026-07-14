@@ -242,6 +242,31 @@ correcto). Se ejecuta una vez, o cuando quieras cambiarlas:
 python configurar_canal_youtube.py
 ```
 
+### Marca de agua: nombre del grupo/tema y logo, discretos
+
+Dos piezas complementarias, pensadas para no chocar nunca con la letra
+sincronizada ni la barra de forma de onda (que ocupan la franja inferior,
+casi a todo lo ancho):
+
+- **Vídeo principal**: el nombre del tema se queda quemado, pequeño y
+  semitransparente, en la esquina **superior izquierda** (automático, sin
+  preguntar nada — `subir_tema.py` ya le pasa el título). El logo del
+  grupo NO se quema aquí: se configura **una sola vez** como watermark
+  nativo de YouTube (`configurar_marca_agua.py`), que a partir de ahí lo
+  superpone solo en todos tus vídeos largos, sin tocar nada más. YouTube
+  coloca ese watermark en la esquina **superior derecha** — por eso el
+  nombre del tema va a la izquierda, para que nunca se pisen:
+  ```bash
+  python configurar_marca_agua.py
+  ```
+  Usa un PNG con fondo transparente (el logo "sin fondo" que comentábamos).
+- **Shorts**: como YouTube no aplica su watermark de canal a los Shorts,
+  ahí sí se queman los dos juntos (logo + nombre del tema), también en la
+  esquina superior izquierda. `subir_tema.py` te pregunta la ruta al logo
+  transparente una vez y la recuerda para las siguientes veces
+  (`config/asistente_memoria.json`); si no le das ninguno, el Short lleva
+  solo el nombre del tema, sin logo.
+
 ### Lo que NO se puede automatizar por API (hazlo a mano en YouTube Studio)
 
 - **Pantallas finales y tarjetas** dentro del vídeo (enlazar a otro vídeo/

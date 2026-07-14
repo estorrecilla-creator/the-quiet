@@ -15,6 +15,7 @@ from src.star_light import build_star_script, STAR_SIZE
 from src.lyrics import srt_to_ass, subtitles_filter_fragment
 from src.person_mask import extract_person_cutout
 from src.cover_sequence import build_movement_chain, build_video_clip_chain, MOVEMENTS
+from src.watermark import make_watermark_sticker, watermark_overlay_filter
 
 STAR_FPS = 12
 GLOW_ASSET = str(Path(__file__).resolve().parent.parent / "assets" / "glow.png")
@@ -46,6 +47,9 @@ def generate_short(
     movement: str = "zoom_in",
     lyrics_path: str = None,
     lyrics_offset: float = 0.0,
+    track_title: str = None,
+    watermark_logo_path: str = None,
+    watermark_opacity: float = 0.65,
 ):
     duration = end - start
     w, h = 1080, 1920
@@ -58,6 +62,7 @@ def generate_short(
         audio_path, reference_image, w, h, fps=STAR_FPS, offset=start, duration=duration
     )
     ass_path = None
+    wm_sticker_path = None
     person_cutout = extract_person_cutout(reference_image)
     try:
         star_path_arg = escape_path(star_script)
@@ -91,6 +96,7 @@ def generate_short(
             base_label = "coverstarperson"
 
         filter_complex += f";[{base_label}][wave]overlay=0:(H-h)/2:shortest=1[outv0]"
+        final_label = "outv0"
 
         if lyrics_path:
             margin_v = wave_h + 12
@@ -98,9 +104,8 @@ def generate_short(
                 lyrics_path, w, h, margin_v, offset=start, duration=duration,
                 manual_shift=lyrics_offset,
             )
-            filter_complex += f";[outv0]{subtitles_filter_fragment(ass_path)}[outv]"
-        else:
-            filter_complex = filter_complex.replace("[outv0]", "[outv]")
+            filter_complex += f";[{final_label}]{subtitles_filter_fragment(ass_path)}[outv1]"
+            final_label = "outv1"
 
         cmd = ["ffmpeg", "-y", "-i", audio_path]
         if is_video:
@@ -108,11 +113,24 @@ def generate_short(
         else:
             cmd += ["-loop", "1", "-i", cover_path]
         cmd += ["-loop", "1", "-i", GLOW_ASSET]
+        next_idx = 3
         if person_cutout:
             cmd += ["-loop", "1", "-i", person_cutout]
+            next_idx = 4
+
+        if track_title or watermark_logo_path:
+            wm_sticker_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
+            make_watermark_sticker(
+                wm_sticker_path, track_title=track_title, logo_path=watermark_logo_path,
+                opacity=watermark_opacity,
+            )
+            cmd += ["-loop", "1", "-i", wm_sticker_path]
+            filter_complex += f";{watermark_overlay_filter(final_label, 'outv', next_idx, w)}"
+            final_label = "outv"
+
         cmd += [
             "-filter_complex", filter_complex,
-            "-map", "[outv]", "-map", "[aout]", "-t", str(duration),
+            "-map", f"[{final_label}]", "-map", "[aout]", "-t", str(duration),
             "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k",
             output_path,
@@ -130,6 +148,8 @@ def generate_short(
             os.remove(person_cutout)
         if is_video:
             os.remove(reference_image)
+        if wm_sticker_path:
+            os.remove(wm_sticker_path)
 
 
 if __name__ == "__main__":

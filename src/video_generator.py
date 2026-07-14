@@ -25,6 +25,7 @@ from src.star_light import build_star_script, STAR_SIZE
 from src.lyrics import srt_to_ass, subtitles_filter_fragment
 from src.person_mask import extract_person_cutout, blank_rgba_like
 from src.cover_sequence import build_cover_sequence_filter, compute_segment_durations, build_video_clip_chain, MOVEMENTS
+from src.watermark import make_watermark_sticker, watermark_overlay_filter
 
 STAR_FPS = 12
 GLOW_ASSET = str(Path(__file__).resolve().parent.parent / "assets" / "glow.png")
@@ -66,6 +67,9 @@ def generate_main_video(
     zoom_max: float = 1.15,
     lyrics_path: str = None,
     lyrics_offset: float = 0.0,
+    track_title: str = None,
+    watermark_logo_path: str = None,
+    watermark_opacity: float = 0.65,
 ):
     """
     Genera un vídeo horizontal (YouTube). `cover_path` puede ser una sola
@@ -100,6 +104,7 @@ def generate_main_video(
     star_script = build_star_script(audio_path, reference_images[0], w, h, fps=STAR_FPS)
     ass_path = None
     person_cutouts = None
+    wm_sticker_path = None
     try:
         star_path_arg = escape_path(star_script)
 
@@ -190,19 +195,28 @@ def generate_main_video(
                     os.remove(c)
 
         filter_complex += f";[{base_label}][wave]overlay=0:{h - wave_h}:shortest=1[outv0]"
+        final_label = "outv0"
 
         if lyrics_path:
             margin_v = wave_h + 12
             ass_path = srt_to_ass(lyrics_path, w, h, margin_v, manual_shift=lyrics_offset)
-            filter_complex += (
-                f";[outv0]{subtitles_filter_fragment(ass_path)}[outv]"
+            filter_complex += f";[{final_label}]{subtitles_filter_fragment(ass_path)}[outv1]"
+            final_label = "outv1"
+
+        if track_title or watermark_logo_path:
+            wm_sticker_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
+            make_watermark_sticker(
+                wm_sticker_path, track_title=track_title, logo_path=watermark_logo_path,
+                opacity=watermark_opacity,
             )
-        else:
-            filter_complex = filter_complex.replace("[outv0]", "[outv]")
+            input_args += ["-loop", "1", "-i", wm_sticker_path]
+            filter_complex += f";{watermark_overlay_filter(final_label, 'outv', idx, w)}"
+            idx += 1
+            final_label = "outv"
 
         cmd = ["ffmpeg", "-y"] + input_args + [
             "-filter_complex", filter_complex,
-            "-map", "[outv]", "-map", "0:a",
+            "-map", f"[{final_label}]", "-map", "0:a",
             "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k", "-shortest",
             output_path,
@@ -221,6 +235,8 @@ def generate_main_video(
                 os.remove(c)
         for r in temp_reference_images:
             os.remove(r)
+        if wm_sticker_path:
+            os.remove(wm_sticker_path)
 
 
 if __name__ == "__main__":
