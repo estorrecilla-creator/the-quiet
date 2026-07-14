@@ -2,10 +2,10 @@
 procesar_lp.py — "app" para automatizar un LP completo de una vez.
 
 Arrastra sobre el icono (o un acceso directo a `procesar_lp.bat`) la
-carpeta con los audios del LP y el documento del LP en .txt (letras,
-estilo, concepto — en texto libre, como se lo describirías a alguien; no
-hace falta ninguna plantilla fija). Si no arrastras nada, te pregunta las
-rutas.
+carpeta con los audios del LP (o un .zip con ellos dentro — se descomprime
+solo) y el documento del LP en .txt (letras, estilo, concepto — en texto
+libre, como se lo describirías a alguien; no hace falta ninguna plantilla
+fija). Si no arrastras nada, te pregunta las rutas.
 
 Te pregunta UNA vez al principio (artista/género, masterización, marca de
 agua, número de Shorts...) y a partir de ahí genera solo, uno detrás de
@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import tempfile
+import zipfile
 from datetime import date
 from pathlib import Path
 
@@ -49,19 +50,43 @@ AUDIO_EXTENSIONS = st.AUDIO_EXTENSIONS
 def _resolve_dropped_paths(args):
     """
     De los argumentos recibidos (arrastrados sobre el icono, en cualquier
-    orden), identifica cuál es la carpeta de audios y cuál el documento
-    del LP (.txt). Si no encaja exactamente uno de cada, devuelve
-    (None, None) para que el que llama pida las rutas a mano.
+    orden), identifica cuál es la carpeta de audios (o un .zip con ellos
+    dentro, ver `_extract_zip_if_needed`) y cuál el documento del LP
+    (.txt). Si no encaja exactamente uno de cada, devuelve (None, None)
+    para que el que llama pida las rutas a mano.
     """
     folder = None
     dossier = None
     for arg in args:
         p = Path(arg.strip('"'))
-        if p.is_dir():
+        if p.is_dir() or (p.is_file() and p.suffix.lower() == ".zip"):
             folder = str(p)
         elif p.is_file() and p.suffix.lower() == ".txt":
             dossier = str(p)
     return folder, dossier
+
+
+def _extract_zip_if_needed(folder_path: str) -> str:
+    """
+    Si `folder_path` es un .zip (en vez de una carpeta ya descomprimida),
+    lo descomprime junto a sí mismo (en una carpeta con su mismo nombre)
+    y devuelve esa carpeta. Si ya se había descomprimido antes (misma
+    carpeta, no vacía), no lo vuelve a hacer. Si no es un .zip, lo
+    devuelve tal cual.
+    """
+    p = Path(folder_path)
+    if not (p.is_file() and p.suffix.lower() == ".zip"):
+        return folder_path
+
+    extract_dir = p.with_suffix("")
+    if extract_dir.exists() and any(extract_dir.iterdir()):
+        return str(extract_dir)
+
+    print(f"-> Descomprimiendo {p.name}...")
+    extract_dir.mkdir(exist_ok=True)
+    with zipfile.ZipFile(p) as zf:
+        zf.extractall(extract_dir)
+    return str(extract_dir)
 
 
 def _natural_sort_key(path):
@@ -229,9 +254,11 @@ def main():
 
     folder, dossier_path = _resolve_dropped_paths(sys.argv[1:])
     if not folder:
-        folder = st.ask("Ruta a la carpeta con los audios del LP")
+        folder = st.ask("Ruta a la carpeta (o archivo .zip) con los audios del LP")
     if not dossier_path:
         dossier_path = st.ask_path("Ruta al documento del LP (.txt)")
+
+    folder = _extract_zip_if_needed(folder)
 
     if not Path(folder).is_dir():
         print(f"No encuentro la carpeta: {folder}")

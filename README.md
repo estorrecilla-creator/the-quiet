@@ -132,12 +132,15 @@ programación/subida a YouTube de todo el LP.
 2. Clic derecho sobre `procesar_lp.bat` → **Enviar a** → **Escritorio
    (crear acceso directo)**.
 3. A partir de ahora: selecciona en el Explorador la carpeta con los
-   audios del LP **y** el documento del LP (.txt) — con las dos cosas
-   seleccionadas a la vez (Ctrl+clic) — y arrástralas juntas sobre el
-   icono del escritorio. Se abre una ventana y arranca solo.
+   audios del LP (o un **.zip** con ellos dentro — se descomprime solo,
+   no hace falta descomprimirlo a mano) **y** el documento del LP (.txt)
+   — con las dos cosas seleccionadas a la vez (Ctrl+clic) — y arrástralas
+   juntas sobre el icono del escritorio. Se abre una ventana y arranca
+   solo.
 
 Si haces doble clic en el icono sin arrastrar nada, te pregunta las dos
-rutas a mano (como el resto de asistentes de este proyecto).
+rutas a mano (como el resto de asistentes de este proyecto) — ahí también
+puedes pegar la ruta a un .zip en vez de a una carpeta ya descomprimida.
 
 ### Qué pregunta y qué no
 
