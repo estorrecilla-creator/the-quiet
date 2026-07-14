@@ -140,8 +140,15 @@ un clip que encaje para algún hueco, genera una imagen con IA en su lugar
 
 Configuración: añade `PEXELS_API_KEY=...` a tu `.env` (clave gratuita,
 aprobación instantánea, en [pexels.com/api](https://www.pexels.com/api/)).
+Opcionalmente añade también `PIXABAY_API_KEY=...` (igual de gratuita, en
+[pixabay.com/api/docs](https://pixabay.com/api/docs/)): se usa como
+segunda fuente, probando primero Pexels y cayendo en Pixabay solo si
+Pexels no encuentra nada para esa búsqueda concreta — entre las dos hay
+más posibilidades de encontrar un clip válido para cada hueco. Basta con
+tener una de las dos claves para activar la búsqueda de vídeo.
 
-Condiciones de toda búsqueda:
+Condiciones de toda búsqueda (se aplican igual busque en Pexels o en
+Pixabay):
 - **Orientación según destino**: horizontal para el vídeo principal,
   vertical para los Shorts — se buscan por separado, cada uno con clips
   pensados para su formato en vez de recortar a lo bruto uno del otro.
@@ -156,12 +163,13 @@ Condiciones de toda búsqueda:
   un rostro reconocible ni contacto visual con la cámara. Esto se aplica
   en dos capas: al generar las búsquedas (evitando términos como "face",
   "portrait" o "close-up") y como filtro de seguridad al elegir el
-  resultado (se descarta cualquier vídeo cuyo propio título en Pexels
-  sugiera una cara en primer plano, aunque la búsqueda lo haya devuelto).
+  resultado (se descarta cualquier vídeo cuya propia descripción —título
+  en Pexels, tags en Pixabay— sugiera una cara en primer plano, aunque la
+  búsqueda lo haya devuelto).
 
 Los Shorts ya admiten vídeo real como portada (antes solo imágenes fijas).
-Si no tienes `PEXELS_API_KEY` o no se encuentra un clip vertical, el
-asistente cae en generar una imagen con IA o en reutilizar la primera
+Si no tienes ninguna de las dos claves o no se encuentra un clip vertical,
+el asistente cae en generar una imagen con IA o en reutilizar la primera
 imagen fija del vídeo principal, sin interrumpir el proceso.
 
 ### Vídeo principal: sin bucles visibles y color homogéneo

@@ -204,13 +204,13 @@ def _resolve_stock_video_covers(
 
 def _resolve_cover_interactive(artist, title, genre, context, audio_path):
     have_openai = bool(os.environ.get("OPENAI_API_KEY"))
-    have_pexels = bool(os.environ.get("PEXELS_API_KEY"))
+    have_stock = bool(os.environ.get("PEXELS_API_KEY") or os.environ.get("PIXABAY_API_KEY"))
 
-    if not have_openai and not have_pexels:
+    if not have_openai and not have_stock:
         print(
-            "  (Nota: no tienes OPENAI_API_KEY ni PEXELS_API_KEY en tu .env, "
-            "así que no puedo generar/buscar portadas automáticamente. "
-            "Añade alguna para activarlo la próxima vez.)"
+            "  (Nota: no tienes OPENAI_API_KEY ni PEXELS_API_KEY/PIXABAY_API_KEY "
+            "en tu .env, así que no puedo generar/buscar portadas "
+            "automáticamente. Añade alguna para activarlo la próxima vez.)"
         )
         cover = ask_path(
             "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
@@ -219,11 +219,11 @@ def _resolve_cover_interactive(artist, title, genre, context, audio_path):
         return cover, None
 
     opciones = ["[t]engo las imágenes"]
-    if have_pexels:
+    if have_stock:
         opciones.append("[v]ídeo libre de derechos")
     if have_openai:
         opciones.append("[g]enerar con IA")
-    default_modo = "v" if have_pexels else "g"
+    default_modo = "v" if have_stock else "g"
 
     modo = ask(
         "¿Ya tienes las imágenes de portada, quieres que busque vídeo libre "
@@ -238,7 +238,7 @@ def _resolve_cover_interactive(artist, title, genre, context, audio_path):
         )
         return cover, None
 
-    if modo.startswith("v") and have_pexels:
+    if modo.startswith("v") and have_stock:
         suggested_n = _suggest_clip_count(audio_path)
         n_images = int(ask(
             "¿Cuántos clips de vídeo buscamos para el vídeo principal? Cuantos "
