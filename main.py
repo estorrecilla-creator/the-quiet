@@ -52,16 +52,22 @@ def resolve_cover(cover_arg):
 
 def process_track(
     audio_path, cover_path, artist, title, genre, context, n_shorts, out_dir,
-    lyrics_path=None, lyrics_offset=0.0,
+    lyrics_path=None, lyrics_offset=0.0, shorts_cover_override=None,
 ):
     out_dir = Path(out_dir) / title.replace(" ", "_")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     cover = resolve_cover(cover_path)
-    if isinstance(cover, list):
-        # los Shorts todavía solo admiten una imagen fija como portada, no
-        # un clip de vídeo; si hay alguna imagen en la lista, se prefiere
-        # esa para los Shorts aunque el vídeo principal use vídeo real.
+    if shorts_cover_override:
+        # portada (imagen o clip) buscada/generada específicamente en
+        # orientación vertical para los Shorts, en vez de reutilizar la del
+        # vídeo principal (pensada en horizontal).
+        cover_for_shorts = shorts_cover_override
+    elif isinstance(cover, list):
+        # sin una portada vertical dedicada: entre las del vídeo principal
+        # (pensadas en horizontal), se prefiere una imagen fija a un clip de
+        # vídeo para los Shorts, ya que no sabemos si el clip es horizontal
+        # o vertical y recortarlo a lo bruto puede quedar peor que la imagen.
         images_only = [c for c in cover if Path(c).suffix.lower() in IMAGE_EXTENSIONS]
         cover_for_shorts = images_only[0] if images_only else cover[0]
     else:

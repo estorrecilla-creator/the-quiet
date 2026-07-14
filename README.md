@@ -141,9 +141,21 @@ un clip que encaje para algún hueco, genera una imagen con IA en su lugar
 Configuración: añade `PEXELS_API_KEY=...` a tu `.env` (clave gratuita,
 aprobación instantánea, en [pexels.com/api](https://www.pexels.com/api/)).
 
-Los Shorts, de momento, solo admiten imágenes fijas como portada — si la
-carpeta tiene alguna imagen además de clips de vídeo, se usa esa para los
-Shorts aunque el vídeo principal combine vídeo real e imágenes.
+Condiciones de toda búsqueda:
+- **Orientación según destino**: horizontal para el vídeo principal,
+  vertical para los Shorts — se buscan por separado, cada uno con clips
+  pensados para su formato en vez de recortar a lo bruto uno del otro.
+- **Calidad mínima HD estricta**: un resultado sin ningún archivo de al
+  menos 720p en su lado corto se descarta entero, no cae a una versión de
+  menor calidad.
+- **Emociones antes que objetos**: las búsquedas que genero priorizan
+  escenas con una persona/situación que transmita un estado de ánimo
+  concreto sobre objetos sueltos sin nadie que los habite.
+
+Los Shorts ya admiten vídeo real como portada (antes solo imágenes fijas).
+Si no tienes `PEXELS_API_KEY` o no se encuentra un clip vertical, el
+asistente cae en generar una imagen con IA o en reutilizar la primera
+imagen fija del vídeo principal, sin interrumpir el proceso.
 
 ## Programar la publicación en YouTube
 

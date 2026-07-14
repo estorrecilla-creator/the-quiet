@@ -61,11 +61,21 @@ def generate_image_prompts(artist, track_title, genre, context, n_images=3):
 STOCK_SYSTEM_PROMPT = """Eres un editor de vídeo buscando metraje de stock (banco de
 vídeo libre de derechos tipo Pexels/Pixabay) para acompañar un tema musical.
 Generas búsquedas cortas en inglés (2-4 palabras, como las que escribirías en
-el buscador de un banco de vídeo), de escenas/objetos concretos y filmables
-de verdad (nada abstracto ni imposible de encontrar como metraje real). Cada
-búsqueda debe ser distinta pero coherente con el resto (mismo universo
-visual/atmósfera). Responde ÚNICAMENTE con JSON válido, sin texto adicional
-ni bloques de markdown."""
+el buscador de un banco de vídeo), de escenas concretas y filmables de
+verdad (nada abstracto ni imposible de encontrar como metraje real).
+
+Prioridad clave: busca EMOCIONES antes que OBJETOS. Una escena con una
+persona/situación que transmita un estado de ánimo concreto (soledad,
+anhelo, calma, tensión, melancolía...) siempre gana a un objeto suelto sin
+nadie ni nada que lo habite — mejor "person alone rain window" que "rain
+window", mejor "quiet solitude empty room" que "empty room", mejor "man
+waiting train station" que "train station". Solo recurre a un objeto sin
+presencia humana/emocional si de verdad no hay forma de expresar la
+emoción de la escena de otra manera.
+
+Cada búsqueda debe ser distinta pero coherente con el resto (mismo
+universo visual/atmósfera). Responde ÚNICAMENTE con JSON válido, sin
+texto adicional ni bloques de markdown."""
 
 STOCK_USER_TEMPLATE = """Genera {n_queries} búsquedas cortas de vídeo de stock para
 acompañar este tema musical.

@@ -135,23 +135,25 @@ def _maybe_master_audio(audio_path, memory):
     return out_path
 
 
-def _resolve_stock_video_covers(artist, title, genre, context, n_images, have_openai):
+def _resolve_stock_video_covers(artist, title, genre, context, n_images, have_openai, orientation="landscape"):
     from src.stock_video import find_stock_clip
     from src.image_prompts import generate_stock_queries
 
-    print("-> Generando búsquedas de vídeo de stock a partir del género/contexto...")
+    print("-> Generando búsquedas de vídeo de stock a partir del género/contexto "
+          "(priorizando emociones sobre objetos)...")
     queries = generate_stock_queries(artist, title, genre, context, n_queries=n_images)
     for i, q in enumerate(queries, start=1):
         print(f"   {i}. {q}")
 
-    cover_dir = Path("input") / title.replace(" ", "_")
+    suffix = "" if orientation == "landscape" else "_shorts"
+    cover_dir = Path("input") / f"{title.replace(' ', '_')}{suffix}"
     cover_dir.mkdir(parents=True, exist_ok=True)
 
     covers = []
     for i, query in enumerate(queries, start=1):
-        print(f"-> Buscando vídeo libre de derechos para: {query!r}...")
+        print(f"-> Buscando vídeo libre de derechos ({orientation}) para: {query!r}...")
         clip_path = str(cover_dir / f"{i:02d}.mp4")
-        result = find_stock_clip(query, clip_path)
+        result = find_stock_clip(query, clip_path, orientation=orientation)
         if result:
             print(f"   Encontrado: {clip_path}")
             covers.append(clip_path)
@@ -166,10 +168,7 @@ def _resolve_stock_video_covers(artist, title, genre, context, n_images, have_op
 
     if not covers:
         print("  No se consiguió ninguna portada por este camino.")
-        return ask_path(
-            "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
-            "(cada una tendrá su propio movimiento de cámara)"
-        )
+        return None
 
     print(f"   Portadas guardadas en: {cover_dir}")
     return str(cover_dir)
@@ -185,10 +184,11 @@ def _resolve_cover_interactive(artist, title, genre, context):
             "así que no puedo generar/buscar portadas automáticamente. "
             "Añade alguna para activarlo la próxima vez.)"
         )
-        return ask_path(
+        cover = ask_path(
             "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
             "(cada una tendrá su propio movimiento de cámara)"
         )
+        return cover, None
 
     opciones = ["[t]engo las imágenes"]
     if have_pexels:
@@ -204,18 +204,34 @@ def _resolve_cover_interactive(artist, title, genre, context):
     ).strip().lower()
 
     if modo.startswith("t"):
-        return ask_path(
+        cover = ask_path(
             "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
             "(cada una tendrá su propio movimiento de cámara)"
         )
+        return cover, None
 
     n_images = int(ask(
-        "¿Cuántas portadas/clips generamos? (cada uno tendrá su propio "
-        "movimiento de cámara, o su propio movimiento real si es vídeo)", "3"
+        "¿Cuántas portadas/clips generamos para el vídeo principal? (cada "
+        "uno tendrá su propio movimiento de cámara, o su propio movimiento "
+        "real si es vídeo)", "3"
     ))
 
     if modo.startswith("v") and have_pexels:
-        return _resolve_stock_video_covers(artist, title, genre, context, n_images, have_openai)
+        cover = _resolve_stock_video_covers(
+            artist, title, genre, context, n_images, have_openai, orientation="landscape"
+        )
+        if cover is None:
+            cover = ask_path(
+                "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
+                "(cada una tendrá su propio movimiento de cámara)"
+            )
+            return cover, None
+
+        print("-> Buscando también una portada vertical propia para los Shorts...")
+        shorts_cover = _resolve_stock_video_covers(
+            artist, title, genre, context, 1, have_openai, orientation="portrait"
+        )
+        return cover, shorts_cover
 
     print("-> Generando prompts de imagen a partir del género/contexto...")
     prompts = generate_image_prompts(artist, title, genre, context, n_images=n_images)
@@ -226,7 +242,7 @@ def _resolve_cover_interactive(artist, title, genre, context):
     print(f"-> Generando {n_images} imágenes con IA (puede tardar un minuto)...")
     generate_cover_images(prompts, str(cover_dir))
     print(f"   Imágenes guardadas en: {cover_dir}")
-    return str(cover_dir)
+    return str(cover_dir), None
 
 
 def main():
@@ -246,7 +262,7 @@ def main():
     memory.update({"artist": artist, "genre": genre, "context": context})
     _save_memory(memory)
 
-    cover = _resolve_cover_interactive(artist, title, genre, context)
+    cover, shorts_cover_override = _resolve_cover_interactive(artist, title, genre, context)
     shorts = int(ask("Número de Shorts a generar", "3"))
     lyrics = ask_path(
         "Ruta a la letra (.srt ya sincronizado, o .txt en texto plano para "
@@ -270,6 +286,7 @@ def main():
     out_dir = process_track(
         audio, cover, artist, title, genre, context, shorts, "output",
         lyrics_path=lyrics, lyrics_offset=lyrics_offset,
+        shorts_cover_override=shorts_cover_override,
     )
     print(f"\nListo. Revisa la carpeta: {out_dir}")
 

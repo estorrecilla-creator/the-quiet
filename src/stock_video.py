@@ -17,11 +17,23 @@ import requests
 PEXELS_SEARCH_URL = "https://api.pexels.com/videos/search"
 
 
-def search_stock_clip(query: str, api_key: str, min_duration: float = 4.0, orientation: str = "landscape"):
+def search_stock_clip(
+    query: str,
+    api_key: str,
+    min_duration: float = 4.0,
+    orientation: str = "landscape",
+    min_short_side: int = 720,
+):
     """
-    Busca en Pexels un vídeo que encaje con `query`. Devuelve la URL del
-    archivo de mejor calidad disponible (o la más cercana a HD), o None si
-    no hay resultados o ninguno cumple la duración mínima.
+    Busca en Pexels un vídeo que encaje con `query`, orientado según
+    `orientation` ("landscape" para el vídeo principal, "portrait" para
+    Shorts/Reels). Calidad mínima estricta: si un resultado no tiene
+    ningún archivo con el lado corto (el que define la resolución real,
+    da igual la orientación) de al menos `min_short_side` píxeles, se
+    descarta ese vídeo entero — no cae a una versión de menor calidad.
+    Devuelve la URL del archivo cuyo lado largo esté más cerca de 1920
+    entre los que sí cumplen la calidad mínima, o None si no hay ningún
+    resultado válido.
     """
     response = requests.get(
         PEXELS_SEARCH_URL,
@@ -35,14 +47,18 @@ def search_stock_clip(query: str, api_key: str, min_duration: float = 4.0, orien
     for video in data.get("videos", []):
         if video.get("duration", 0) < min_duration:
             continue
-        files = sorted(
-            video.get("video_files", []),
-            key=lambda f: abs((f.get("width") or 0) - 1920),
+        files = video.get("video_files", [])
+        hd_files = [
+            f for f in files
+            if min((f.get("width") or 0), (f.get("height") or 0)) >= min_short_side
+        ]
+        if not hd_files:
+            continue  # ningún archivo de este vídeo llega a la calidad mínima
+        chosen = min(
+            hd_files,
+            key=lambda f: abs(max((f.get("width") or 0), (f.get("height") or 0)) - 1920),
         )
-        hd_files = [f for f in files if (f.get("height") or 0) >= 720]
-        chosen = hd_files[0] if hd_files else (files[0] if files else None)
-        if chosen:
-            return chosen["link"]
+        return chosen["link"]
 
     return None
 
@@ -56,7 +72,14 @@ def download_video(url: str, out_path: str) -> str:
     return out_path
 
 
-def find_stock_clip(query: str, out_path: str, api_key: str = None, min_duration: float = 4.0):
+def find_stock_clip(
+    query: str,
+    out_path: str,
+    api_key: str = None,
+    min_duration: float = 4.0,
+    orientation: str = "landscape",
+    min_short_side: int = 720,
+):
     """
     Busca y descarga en un solo paso. Si no encuentra nada o falla,
     devuelve None (no lanza excepción) para poder usar una imagen de IA
@@ -66,7 +89,10 @@ def find_stock_clip(query: str, out_path: str, api_key: str = None, min_duration
     if not api_key:
         return None
     try:
-        url = search_stock_clip(query, api_key, min_duration=min_duration)
+        url = search_stock_clip(
+            query, api_key, min_duration=min_duration,
+            orientation=orientation, min_short_side=min_short_side,
+        )
         if not url:
             return None
         return download_video(url, out_path)
