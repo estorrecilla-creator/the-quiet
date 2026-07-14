@@ -16,6 +16,7 @@ https://pixabay.com/api/docs/
 """
 
 import os
+import subprocess
 
 import requests
 
@@ -144,6 +145,28 @@ def download_video(url: str, out_path: str) -> str:
     return out_path
 
 
+def _is_valid_video(path: str, min_duration: float = 1.0) -> bool:
+    """
+    Comprueba con ffprobe que el archivo descargado es un vídeo de verdad
+    (no un HTML de error, ni un archivo cortado a mitad de descarga por
+    un corte de red) y que tiene al menos `min_duration` segundos. Sin
+    esto, un archivo corrupto puede colarse hasta el render final y fallar
+    ahí con un error de ffmpeg mucho más difícil de diagnosticar.
+    """
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "format=duration", "-of", "csv=p=0", path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return False
+    try:
+        duration = float(result.stdout.strip())
+    except ValueError:
+        return False
+    return duration >= min_duration
+
+
 def find_stock_clip(
     query: str,
     out_path: str,
@@ -177,10 +200,19 @@ def find_stock_clip(
             )
         except requests.RequestException:
             continue
-        if url:
-            try:
-                return download_video(url, out_path)
-            except requests.RequestException:
-                continue
+        if not url:
+            continue
+        try:
+            download_video(url, out_path)
+        except requests.RequestException:
+            continue
+        if _is_valid_video(out_path, min_duration=min_duration):
+            return out_path
+        # descarga corrupta/incompleta (corte de red a mitad, HTML de
+        # error guardado como si fuera vídeo...): la descartamos y
+        # probamos con la siguiente fuente en vez de devolver un archivo
+        # roto que reventaría más adelante en el render.
+        if os.path.exists(out_path):
+            os.remove(out_path)
 
     return None
