@@ -3,6 +3,38 @@
 Automatiza todo el proceso de subir un tema/LP menos la música en sí:
 vídeo principal, Shorts, títulos, descripciones y hashtags.
 
+## Estructura de la carpeta
+
+```
+the-quiet/
+├── tools/                    los asistentes que ejecutas tú (uno por tarea)
+│   ├── subir_tema.py             un solo tema, paso a paso
+│   ├── procesar_lp.py            el LP completo de una vez ("app" de escritorio)
+│   ├── programar_youtube.py      calendarizar/subir un tema ya generado
+│   ├── calendario_lp.py          calcular fechas de lanzamiento del LP
+│   ├── configurar_canal_youtube.py   palabras clave/descripción del canal (1 vez)
+│   ├── configurar_marca_agua.py      logo como watermark de YouTube (1 vez)
+│   └── escalar_video.py          dar más nitidez a un clip suelto (opcional)
+├── *.bat                     accesos directos de Windows a cada asistente de
+│                              tools/ (estos SÍ se quedan en la raíz — son a
+│                              los que apuntan tus iconos del escritorio)
+├── main.py                   el motor: orquesta todo el pipeline
+├── webapp.py + templates/    interfaz web opcional (Flask)
+├── src/                      todos los módulos internos (audio, vídeo,
+│                              YouTube, metadatos...) que usan main.py y tools/
+├── assets/                   fuentes y recursos gráficos propios
+├── lp_content/                contenido ya preparado de cada LP (letras,
+│                              contexto, calendario...)
+├── config/                    credenciales y memoria del asistente (nunca se
+│                              sube a git)
+└── input/ output/ mastered/ normalized/ prepared/   carpetas de trabajo
+                              (se crean solas, tampoco se suben a git)
+```
+
+Los `.bat` de la raíz no se han movido a propósito — son los que ya tienes
+enlazados desde el escritorio, así que los accesos directos que ya creaste
+siguen funcionando igual sin tener que rehacerlos.
+
 ## Modo súper simple (recomendado)
 
 Necesitas [Python](https://python.org) instalado (marca "Add to PATH" durante
@@ -31,8 +63,8 @@ Te instalará todo y creará `.env` — ábrelo con el Bloc de notas y pon tu
 Cada vez que tengas un tema nuevo:
 1. Copia el audio y la portada a `input/`.
 2. Ejecuta:
-   - Mac/Linux: `venv/bin/python subir_tema.py`
-   - Windows: `.\venv\Scripts\python.exe subir_tema.py`
+   - Mac/Linux: `venv/bin/python tools/subir_tema.py`
+   - Windows: `.\venv\Scripts\python.exe tools\subir_tema.py`
 3. Responde las preguntas (artista, título, género, contexto...) y espera.
 4. Revisa el resultado en `output/`.
 
@@ -161,7 +193,7 @@ Si aceptas continuar, te pregunta un par de cosas más (idioma, plantilla
 de miniatura, lista de reproducción, enlaces, hora de publicación...) y
 programa la subida de todos los temas, usando las fechas de
 `calendario_lanzamiento.json` (el calendario de lanzamiento del LP que ya
-hayáis calculado con `calendario_lp.py` — hace falta tenerlo generado de
+hayáis calculado con `tools/calendario_lp.py` — hace falta tenerlo generado de
 antes; las fechas de DistroKid son manuales, no hay API pública, así que
 esa parte la sigues decidiendo tú). Como siempre, te enseña el calendario
 completo del LP **antes** de subir nada, y solo sube de verdad si lo
@@ -362,7 +394,7 @@ Configuración previa (una sola vez):
 Uso:
 - Windows: doble clic en `programar_youtube.bat` (o crea un acceso directo
   igual que con `subir_tema.bat`).
-- Terminal: `python programar_youtube.py` (o `venv/bin/python programar_youtube.py`).
+- Terminal: `python tools/programar_youtube.py` (o `venv/bin/python tools/programar_youtube.py`).
 
 Te pedirá la carpeta de salida del tema (ej. `output/Mi_Tema`), la fecha y
 hora del primer envío (hora de España) y cada cuántos días quieres publicar
@@ -405,7 +437,7 @@ Al confirmar la subida, también te pregunta:
 la descripción del canal (ayuda a que YouTube lo recomiende al nicho
 correcto). Se ejecuta una vez, o cuando quieras cambiarlas:
 ```bash
-python configurar_canal_youtube.py
+python tools/configurar_canal_youtube.py
 ```
 
 ### Marca de agua: nombre del grupo/tema y logo, discretos
@@ -423,7 +455,7 @@ casi a todo lo ancho):
   coloca ese watermark en la esquina **superior derecha** — por eso el
   nombre del tema va a la izquierda, para que nunca se pisen:
   ```bash
-  python configurar_marca_agua.py
+  python tools/configurar_marca_agua.py
   ```
   Usa un PNG con fondo transparente (el logo "sin fondo" que comentábamos).
 - **Shorts**: como YouTube no aplica su watermark de canal a los Shorts,
@@ -466,7 +498,7 @@ ella el proceso es demasiado lento para ser práctico. Si no lo tienes, no
 pasa nada: el resto del pipeline funciona exactamente igual sin este paso.
 
 ```bash
-python escalar_video.py
+python tools/escalar_video.py
 ```
 
 ## Publicar en Facebook e Instagram

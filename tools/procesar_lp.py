@@ -17,7 +17,7 @@ programación/subida a YouTube de todos los temas (usando el calendario de
 lanzamiento del LP que ya hayáis calculado con calendario_lp.py).
 
 Uso:
-    python procesar_lp.py [carpeta_audios] [documento_lp.txt]
+    python tools/procesar_lp.py [carpeta_audios] [documento_lp.txt]
 """
 
 import json
@@ -29,9 +29,12 @@ import zipfile
 from datetime import date
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(REPO_ROOT / ".env")
 
 if not os.environ.get("ANTHROPIC_API_KEY"):
     print(

@@ -7,7 +7,7 @@ principal, los Shorts y los metadatos, sin que tengas que recordar los
 parámetros de main.py ni volver a escribir siempre lo mismo.
 
 Uso:
-    python subir_tema.py
+    python tools/subir_tema.py
 """
 
 import json
@@ -16,9 +16,12 @@ import sys
 from datetime import date
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(REPO_ROOT / ".env")
 
 if not os.environ.get("ANTHROPIC_API_KEY"):
     print(

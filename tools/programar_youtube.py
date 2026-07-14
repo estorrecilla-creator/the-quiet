@@ -10,13 +10,15 @@ Requiere haber configurado antes la subida a YouTube (ver README.md,
 sección de configuración de config/client_secret.json).
 
 Uso:
-    python programar_youtube.py
+    python tools/programar_youtube.py
 """
 
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.release_calendar import build_schedule, load_schedule
 from src.youtube_batch import upload_schedule

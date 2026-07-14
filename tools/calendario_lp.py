@@ -9,11 +9,14 @@ sube nada a ningún sitio. Guarda el resultado para que lo sigas a mano
 (DistroKid) y lo uses como fecha de inicio en programar_youtube.py.
 
 Uso:
-    python calendario_lp.py
+    python tools/calendario_lp.py
 """
 
+import sys
 from datetime import date, datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.lp_release_calendar import build_lp_calendar, save_lp_calendar, next_friday
 

@@ -6,8 +6,13 @@ que quieras cambiarlas).
 Requiere haber configurado antes la subida a YouTube (ver README.md).
 
 Uso:
-    python configurar_canal_youtube.py
+    python tools/configurar_canal_youtube.py
 """
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.youtube_uploader import get_authenticated_service
 from src.youtube_channel import update_channel_branding

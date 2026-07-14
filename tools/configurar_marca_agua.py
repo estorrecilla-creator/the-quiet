@@ -7,10 +7,13 @@ quemado aparte, ver README).
 Requiere haber configurado antes la subida a YouTube (ver README.md).
 
 Uso:
-    python configurar_marca_agua.py
+    python tools/configurar_marca_agua.py
 """
 
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.youtube_uploader import get_authenticated_service
 from src.youtube_watermark import set_channel_watermark

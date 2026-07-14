@@ -26,7 +26,7 @@ todo en carpetas listas para revisión manual antes de subir.
 - `main.py` — orquestador CLI que encadena todo. Carga `.env` automáticamente
   (`python-dotenv`) y falla con un mensaje claro si falta ANTHROPIC_API_KEY,
   en vez de dejar pasar un traceback críptico.
-- `subir_tema.py` — asistente interactivo por terminal (pregunta ruta de
+- `tools/subir_tema.py` — asistente interactivo por terminal (pregunta ruta de
   audio/portada, artista, título, género, contexto, nº de shorts) que llama
   a `process_track()` de `main.py`. Pensado para que Salva no tenga que
   recordar flags de CLI.
@@ -42,7 +42,7 @@ todo en carpetas listas para revisión manual antes de subir.
 
 El pipeline se probó de punta a punta (`process_track` con audio real .wav/.mp3
 sintético + portada) generando vídeo principal, N shorts y JSONs de metadatos
-sin errores, tanto por CLI (`main.py`/`subir_tema.py`) como vía la webapp.
+sin errores, tanto por CLI (`main.py`/`tools/subir_tema.py`) como vía la webapp.
 Para uso real solo falta: (1) que el usuario ponga su ANTHROPIC_API_KEY real
 en `.env` (CLI) o como variable de entorno del servicio desplegado (web), y
 (2) copiar sus temas + portada a `input/` o subirlos por el formulario web.

@@ -9,10 +9,13 @@ y una GPU con soporte Vulkan medianamente decente.
 Instalación de Video2X: https://docs.video2x.org/installing/index.html
 
 Uso:
-    python escalar_video.py
+    python tools/escalar_video.py
 """
 
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.upscale import is_video2x_available, upscale_video
 
