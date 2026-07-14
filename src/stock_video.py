@@ -1,18 +1,18 @@
 """
 stock_video.py
 Busca y descarga clips de vídeo libres de derechos (uso comercial
-permitido, sin atribución obligatoria) en Pexels y Pixabay, como
-alternativa gratuita a generar vídeo con IA de pago. Prueba primero
-Pexels y, si no hay clave o no encuentra nada que encaje, cae en Pixabay
-— entre las dos fuentes hay más posibilidades de encontrar un clip válido
-para cada búsqueda. Si ninguna de las dos encuentra nada, devuelve None
-para que el que llama pueda usar una imagen generada por IA como respaldo
-en su lugar.
+permitido, sin atribución obligatoria) en Pexels, Pixabay y Coverr, como
+alternativa gratuita a generar vídeo con IA de pago. Prueba las fuentes en
+orden y se queda con el primer clip válido — entre las tres hay más
+posibilidades de encontrar uno que encaje para cada búsqueda. Si ninguna
+encuentra nada, devuelve None para que el que llama pueda usar una imagen
+generada por IA como respaldo en su lugar.
 
 Requiere una clave gratuita de Pexels y/o Pixabay (sin coste, aprobación
-instantánea):
+instantánea) y/o Coverr (gratis, pero hay que pedirla por email):
 https://www.pexels.com/api/
 https://pixabay.com/api/docs/
+https://api.coverr.co/docs/start/
 """
 
 import os
@@ -22,6 +22,7 @@ import requests
 
 PEXELS_SEARCH_URL = "https://api.pexels.com/videos/search"
 PIXABAY_SEARCH_URL = "https://pixabay.com/api/videos/"
+COVERR_SEARCH_URL = "https://api.coverr.co/videos"
 
 # Si la descripción del vídeo (slug de Pexels, tags de Pixabay) contiene
 # alguna de estas palabras, lo descartamos aunque la búsqueda lo haya
@@ -136,6 +137,50 @@ def search_pixabay_clip(
     return None
 
 
+def search_coverr_clip(
+    query: str,
+    api_key: str,
+    min_duration: float = 4.0,
+    orientation: str = "landscape",
+    min_short_side: int = 720,
+):
+    """
+    Igual que las anteriores pero contra la API de Coverr. Coverr sí
+    indica la orientación directamente (`is_vertical`), y solo ofrece una
+    URL de descarga por vídeo (no varias calidades a elegir), así que la
+    comprobación de calidad mínima es sobre esa única variante. El título,
+    la descripción y los tags son los que se comprueban contra
+    BANNED_TERMS.
+    """
+    response = requests.get(
+        COVERR_SEARCH_URL,
+        headers={"Authorization": f"Bearer {api_key}"},
+        params={"query": query, "page_size": 5, "urls": "true"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    wants_vertical = orientation != "landscape"
+    for hit in data.get("hits", []):
+        if hit.get("duration", 0) < min_duration:
+            continue
+        if bool(hit.get("is_vertical")) != wants_vertical:
+            continue
+        description = " ".join(
+            str(hit.get(field, "")) for field in ("title", "description")
+        ) + " " + " ".join(hit.get("tags") or [])
+        if _contains_banned_term(description):
+            continue
+        if min(hit.get("max_width") or 0, hit.get("max_height") or 0) < min_short_side:
+            continue
+        url = (hit.get("urls") or {}).get("mp4")
+        if url:
+            return url
+
+    return None
+
+
 def download_video(url: str, out_path: str) -> str:
     response = requests.get(url, stream=True, timeout=120)
     response.raise_for_status()
@@ -175,21 +220,24 @@ def find_stock_clip(
     orientation: str = "landscape",
     min_short_side: int = 720,
     pixabay_api_key: str = None,
+    coverr_api_key: str = None,
 ):
     """
-    Busca y descarga en un solo paso. Prueba primero Pexels y, si no hay
-    clave configurada o no encuentra nada que encaje, cae en Pixabay
-    (misma clave-o-None por variable de entorno). Si no encuentra nada o
-    falla en ambas fuentes, devuelve None (no lanza excepción) para poder
-    usar una imagen de IA como respaldo sin interrumpir el resto del
-    proceso.
+    Busca y descarga en un solo paso. Prueba Pexels, luego Pixabay, luego
+    Coverr (cada una solo si tiene clave configurada), y se queda con el
+    primer clip válido — más posibilidades de encontrar uno que encaje
+    entre las tres. Si no encuentra nada o falla en todas, devuelve None
+    (no lanza excepción) para poder usar una imagen de IA como respaldo
+    sin interrumpir el resto del proceso.
     """
     pexels_key = api_key or os.environ.get("PEXELS_API_KEY")
     pixabay_key = pixabay_api_key or os.environ.get("PIXABAY_API_KEY")
+    coverr_key = coverr_api_key or os.environ.get("COVERR_API_KEY")
 
     for key, search_fn in (
         (pexels_key, search_pexels_clip),
         (pixabay_key, search_pixabay_clip),
+        (coverr_key, search_coverr_clip),
     ):
         if not key:
             continue

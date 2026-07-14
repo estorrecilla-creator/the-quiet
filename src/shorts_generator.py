@@ -16,6 +16,7 @@ from src.lyrics import srt_to_ass, subtitles_filter_fragment
 from src.person_mask import extract_person_cutout
 from src.cover_sequence import build_movement_chain, build_video_clip_chain, MOVEMENTS
 from src.watermark import make_watermark_sticker, pick_logo_variant, watermark_overlay_filter
+from src.cinematic_grade import cinematic_grade_filter
 
 STAR_FPS = 12
 GLOW_ASSET = str(Path(__file__).resolve().parent.parent / "assets" / "glow.png")
@@ -95,6 +96,11 @@ def generate_short(
                 f"[coverstar][personcutout]overlay=x=0:y=0[coverstarperson]"
             )
             base_label = "coverstarperson"
+
+        # acabado cinematográfico (viñeta + grano + tinte sutil) sobre la
+        # capa de fondo, antes de la forma de onda/letra/marca de agua
+        filter_complex += f";{cinematic_grade_filter(base_label, 'graded')}"
+        base_label = "graded"
 
         filter_complex += f";[{base_label}][wave]overlay=0:(H-h)/2:shortest=1[outv0]"
         final_label = "outv0"

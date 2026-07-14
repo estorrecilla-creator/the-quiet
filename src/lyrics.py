@@ -74,6 +74,41 @@ def _format_ass_time(t: float) -> str:
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
 
+def _build_karaoke_text(text: str, duration: float, min_word_cs: int = 8) -> str:
+    """
+    No tenemos el tiempo exacto de cada palabra (solo el de la línea
+    completa), así que se reparte la duración de la línea entre sus
+    palabras proporcionalmente a su longitud en caracteres (una palabra
+    larga tarda más en cantarse que una corta) y se generan las etiquetas
+    de karaoke `\\k` de ASS: el reproductor va resaltando cada palabra a
+    medida que le toca, en vez de mostrar la línea entera de golpe.
+    `min_word_cs` (centésimas de segundo) evita destellos de duración
+    cero en palabras de una sola letra.
+    """
+    total_cs = max(round(duration * 100), min_word_cs)
+    sub_lines = [sub.split() for sub in text.split("\\N")]
+    flat_words = [w for sub in sub_lines for w in sub]
+    if not flat_words:
+        return text
+
+    total_chars = sum(len(w) for w in flat_words) or 1
+    word_cs = []
+    allocated = 0
+    for w in flat_words[:-1]:
+        cs = max(min_word_cs, round(total_cs * len(w) / total_chars))
+        word_cs.append(cs)
+        allocated += cs
+    word_cs.append(max(min_word_cs, total_cs - allocated))
+
+    out_sub_lines = []
+    idx = 0
+    for sub in sub_lines:
+        rendered = [f"{{\\k{word_cs[idx + i]}}}{w}" for i, w in enumerate(sub)]
+        idx += len(sub)
+        out_sub_lines.append(" ".join(rendered))
+    return "\\N".join(out_sub_lines)
+
+
 def srt_to_ass(
     srt_path: str,
     width: int,
@@ -83,6 +118,7 @@ def srt_to_ass(
     offset: float = 0.0,
     duration: float = None,
     manual_shift: float = 0.0,
+    karaoke: bool = True,
 ) -> str:
     """
     Convierte un .srt a .ass con la resolución del vídeo declarada.
@@ -92,6 +128,8 @@ def srt_to_ass(
     `manual_shift` es un ajuste manual adicional en segundos (positivo =
     retrasa la letra, negativo = la adelanta), para corregir a mano un
     desfase que venga del reconocimiento de voz automático.
+    `karaoke` (activado por defecto) resalta la letra palabra a palabra en
+    vez de la línea entera de golpe (ver `_build_karaoke_text`).
     """
     entries = _parse_srt(srt_path)
 
@@ -114,14 +152,19 @@ def srt_to_ass(
             for s, e, text in entries
         ]
 
+    # SecondaryColour es el color de una palabra ANTES de que le toque
+    # (blanco, el look de siempre); PrimaryColour es el color al que
+    # cambia justo cuando le toca sonar (el lavanda de acento que ya usa
+    # la barra de forma de onda, para que se sienta parte del mismo
+    # diseño) — así la letra se va resaltando palabra a palabra.
     header = f"""[Script Info]
 PlayResX: {width}
 PlayResY: {height}
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,{font_size},&H00FFFFFF,&H00000000,&H00000000,0,0,1,2,1,2,10,10,{margin_v},1
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,{font_size},&H00FFB0E0,&H00FFFFFF,&H00000000,&H00000000,0,0,1,2,1,2,10,10,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -129,9 +172,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     lines = [header]
     for start, end, text in entries:
+        display_text = _build_karaoke_text(text, end - start) if karaoke else text
         lines.append(
             f"Dialogue: 0,{_format_ass_time(start)},{_format_ass_time(end)},"
-            f"Default,,0,0,0,,{text}"
+            f"Default,,0,0,0,,{display_text}"
         )
 
     tmp = tempfile.NamedTemporaryFile(

@@ -117,7 +117,8 @@ a YouTube (ver más abajo).
 ## Preparación del audio (automática, dentro de `subir_tema.py`)
 
 Antes de generar nada, `subir_tema.py` deja el audio en su mejor estado
-posible en dos pasos:
+posible, en una cadena de pasos (cada uno parte del resultado del
+anterior):
 
 1. **Masterización opcional** (`src/mastering.py`, con
    [Matchering](https://github.com/sergree/matchering) — gratis, local, de
@@ -125,14 +126,24 @@ posible en dos pasos:
    de referencia con el sonido que buscas. Ajusta ecualización y volumen
    para parecerse a esa referencia, sin tocar el contenido de la canción
    (no corta ni reordena nada). Se guarda en `mastered/`.
-2. **Normalización de volumen** (`src/loudness.py`) — esta **siempre** se
-   aplica, no hay que elegir nada: lleva el volumen final a -14 LUFS (el
-   estándar que usan YouTube y Spotify), con un límite de pico real de
-   -1 dBTP para no recortar. Sin esto, un tema más flojo o más fuerte que
-   el resto de tu catálogo suena descompensado al pasar de un vídeo a
-   otro del mismo canal. Se aplica después de la masterización opcional
-   (que ajusta tono/color, pero no garantiza un LUFS exacto) y se guarda
-   en `normalized/` — ese es el archivo final: el que se usa para generar
+2. **Recorte de silencio** al principio/final (`src/audio_hygiene.py`,
+   siempre) — no toca el silencio de en medio, solo el tramo muerto antes
+   de que arranque o después de que acabe la canción.
+3. **Aviso de compatibilidad mono** (siempre, solo diagnóstico, no
+   modifica nada): suma el audio a mono y avisa si pierde mucha energía
+   (posible cancelación de fase por un estéreo muy ancho), algo que se
+   nota en dispositivos que reproducen en mono.
+4. **Reducción de ruido de fondo condicional** (siempre se comprueba,
+   `src/audio_hygiene.py`) — solo se aplica una reducción muy conservadora
+   (`afftdn`) si de verdad se detecta un suelo de ruido audible en los
+   pasajes más flojos de la pista; si la mezcla ya está limpia (o no hay
+   pasajes flojos con los que compararse), no se toca nada.
+5. **Normalización de volumen y sample rate** (`src/loudness.py`, siempre)
+   — lleva el volumen final a -14 LUFS (el estándar de YouTube/Spotify,
+   con límite de pico real de -1 dBTP) y re-muestrea a 44.1kHz, para que
+   ningún tema del canal suene más flojo/fuerte que otro ni se mezclen
+   sample rates distintos entre masters de un mismo LP. Se guarda en
+   `normalized/` — ese es el archivo final: el que se usa para generar
    los vídeos y el que puedes subir a DistroKid.
 
 ## Generar las portadas con IA (opcional)
@@ -162,14 +173,21 @@ un clip que encaje para algún hueco, genera una imagen con IA en su lugar
 Configuración: añade `PEXELS_API_KEY=...` a tu `.env` (clave gratuita,
 aprobación instantánea, en [pexels.com/api](https://www.pexels.com/api/)).
 Opcionalmente añade también `PIXABAY_API_KEY=...` (igual de gratuita, en
-[pixabay.com/api/docs](https://pixabay.com/api/docs/)): se usa como
-segunda fuente, probando primero Pexels y cayendo en Pixabay solo si
-Pexels no encuentra nada para esa búsqueda concreta — entre las dos hay
-más posibilidades de encontrar un clip válido para cada hueco. Basta con
-tener una de las dos claves para activar la búsqueda de vídeo.
+[pixabay.com/api/docs](https://pixabay.com/api/docs/)) y/o
+`COVERR_API_KEY=...` (gratis, pero hay que pedirla por email a
+team@coverr.co — [api.coverr.co/docs/start](https://api.coverr.co/docs/start/)):
+se usan como fuentes de respaldo, probando primero Pexels, luego Pixabay,
+luego Coverr, y quedándose con el primer clip válido — entre las tres hay
+más posibilidades de encontrar uno que encaje para cada hueco. Basta con
+tener una de las tres claves para activar la búsqueda de vídeo.
 
-Condiciones de toda búsqueda (se aplican igual busque en Pexels o en
-Pixabay):
+Todas las descargas se comprueban con `ffprobe` antes de aceptarlas (que
+sea un vídeo de verdad, no un archivo cortado a mitad de descarga o un
+HTML de error) — si sale corrupta, se descarta y se prueba con la
+siguiente fuente en vez de arrastrar un archivo roto hasta el render
+final.
+
+Condiciones de toda búsqueda (se aplican igual en las tres fuentes):
 - **Orientación según destino**: horizontal para el vídeo principal,
   vertical para los Shorts — se buscan por separado, cada uno con clips
   pensados para su formato en vez de recortar a lo bruto uno del otro.
@@ -209,6 +227,32 @@ los clips descargados y corrige cada uno hacia un punto medio común
 se note menos — además de las transiciones (fundidos, barridos...) que ya
 había entre cada dos.
 
+Los cortes entre clips, además, caen en un cambio real de la música en
+vez de a mitad de una nota: `src/cover_sequence.py` detecta los
+ataques/onsets de la pista (con `librosa`, ya lo usamos para los Shorts) y
+"engancha" cada corte al más cercano dentro de una ventana de unos
+segundos alrededor del reparto uniforme — si no hay ningún ataque cerca
+de un punto, se queda con el reparto uniforme para ese corte, sin errores.
+
+### Acabado cinematográfico discreto
+
+Tanto el vídeo principal como los Shorts llevan, siempre, una viñeta
+suave + grano fino + un ligero toque de color entre sombras y luces
+(`src/cinematic_grade.py`, todo con filtros nativos de ffmpeg) sobre la
+capa de fondo — antes de superponer la forma de onda, la letra o la marca
+de agua, para no ensuciar la legibilidad del texto ni oscurecer sus
+esquinas con la viñeta.
+
+### Letra en karaoke, palabra a palabra
+
+La letra sincronizada (`src/lyrics.py`) ya no se muestra línea a línea de
+golpe: cada palabra se resalta (blanco → lavanda, el mismo color de acento
+que la barra de forma de onda) según le toca cantarse. No tenemos el
+tiempo exacto de cada palabra suelta (solo el de la línea completa vía
+reconocimiento de voz), así que se reparte proporcionalmente a la
+longitud de cada palabra — no es perfecto al 100%, pero se nota mucho más
+vivo que la línea entera estática.
+
 ## Programar la publicación en YouTube
 
 Una vez tienes el vídeo principal y los Shorts de un tema en `output/`, hay
@@ -241,6 +285,17 @@ programa de verdad si confirmas explícitamente.
 se ha ampliado (de "solo subir vídeos" a "gestión completa del canal", para
 poder crear listas de reproducción). Borra `config/token.json` para que la
 próxima subida te pida autorizar de nuevo con el permiso ampliado.
+
+### Miniaturas por tema, con contraste automático
+
+Si le das una plantilla (la portada del LP con el logo/nombre de grupo/
+álbum ya diseñada), `src/thumbnail_template.py` genera una miniatura por
+tema sustituyendo el nombre del álbum por el título del tema, sin tocar
+el resto del diseño. El color del texto se elige automáticamente según el
+brillo real del fondo de la plantilla (gris claro sobre fondos oscuros,
+gris oscuro sobre fondos claros) — así funciona igual de bien con
+cualquier portada futura, no solo con fondo negro como "The Hollow Hour".
+Si no das plantilla, se usa un fotograma del propio vídeo como miniatura.
 
 ### Listas de reproducción y enlaces en la descripción
 
@@ -304,6 +359,25 @@ casi a todo lo ancho):
   están suscritos".
 - **Comentario fijado** con enlaces en cada vídeo: entra al vídeo,
   publica el comentario, menú (⋮) → "Fijar".
+
+## Dar más nitidez a un clip suelto (opcional, necesita GPU)
+
+Si algún clip de stock llega justo de calidad (justo en el mínimo HD),
+`escalar_video.py` puede escalarlo x2 o x4 con IA (Real-ESRGAN, a través
+de [Video2X](https://docs.video2x.org/installing/index.html) — gratis, de
+código abierto). No forma parte del pipeline automático: es una
+herramienta aparte para usar clip a clip cuando tú decidas que uno lo
+necesita, no todos los sacados de Pexels/Pixabay/Coverr valen la pena
+escalar.
+
+Necesita tener Video2X instalado por separado (el instalador de Windows
+lo añade al PATH) y una GPU con soporte Vulkan medianamente decente — sin
+ella el proceso es demasiado lento para ser práctico. Si no lo tienes, no
+pasa nada: el resto del pipeline funciona exactamente igual sin este paso.
+
+```bash
+python escalar_video.py
+```
 
 ## Publicar en Facebook e Instagram
 

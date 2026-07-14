@@ -20,11 +20,10 @@ import re
 import subprocess
 from pathlib import Path
 
-import soundfile as sf
-
-TARGET_I = -14.0   # LUFS integrados (estándar YouTube/Spotify)
-TARGET_TP = -1.0   # dBTP, margen de pico real para evitar clipping
-TARGET_LRA = 11.0  # rango de sonoridad objetivo
+TARGET_I = -14.0            # LUFS integrados (estándar YouTube/Spotify)
+TARGET_TP = -1.0            # dBTP, margen de pico real para evitar clipping
+TARGET_LRA = 11.0           # rango de sonoridad objetivo
+TARGET_SAMPLE_RATE = 44100  # estándar; evita mezclar 44.1/48kHz entre masters del mismo LP
 
 
 def measure_loudness(audio_path: str) -> dict:
@@ -52,15 +51,16 @@ def measure_loudness(audio_path: str) -> dict:
         return None
 
 
-def normalize_loudness(audio_path: str, out_path: str) -> str:
+def normalize_loudness(audio_path: str, out_path: str, sample_rate: int = TARGET_SAMPLE_RATE) -> str:
     """
     Normaliza `audio_path` al nivel objetivo y lo guarda en `out_path`
-    (creando la carpeta si hace falta), conservando el sample rate
-    original. Dos pasadas si la medición sale bien (más precisa),
-    una sola pasada como respaldo si no.
+    (creando la carpeta si hace falta), re-muestreando a `sample_rate`
+    (44.1kHz por defecto) — así todos los temas de un mismo LP quedan al
+    mismo sample rate aunque vengan de masters distintos (evita mezclar
+    44.1/48kHz sin darte cuenta). Dos pasadas si la medición sale bien
+    (más precisa), una sola pasada como respaldo si no.
     """
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    sample_rate = sf.info(audio_path).samplerate
 
     measured = measure_loudness(audio_path)
     if measured:

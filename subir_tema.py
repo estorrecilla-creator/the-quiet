@@ -135,6 +135,55 @@ def _maybe_master_audio(audio_path, memory):
     return out_path
 
 
+def _trim_silence_step(audio_path):
+    """
+    Siempre se aplica: recorta el silencio del principio y del final (no
+    el de en medio, ese es parte de la canción) para que el vídeo no
+    arranque/acabe con un tramo muerto.
+    """
+    from src.audio_hygiene import trim_silence
+    prepared_dir = Path("prepared")
+    prepared_dir.mkdir(exist_ok=True)
+    out_path = str(prepared_dir / f"{Path(audio_path).stem}_trimmed.wav")
+    trim_silence(audio_path, out_path)
+    return out_path
+
+
+def _check_mono_compatibility_step(audio_path):
+    """
+    Solo diagnóstico, no toca el audio: avisa si la mezcla pierde mucha
+    energía al sumarse a mono (estéreo muy ancho o fase invertida en
+    algún punto), algo que se nota en dispositivos/altavoces que
+    reproducen en mono.
+    """
+    from src.audio_hygiene import check_mono_compatibility
+    result = check_mono_compatibility(audio_path)
+    if result.get("warning"):
+        print(
+            f"  Aviso: la mezcla pierde {abs(result['diff_db']):.1f} dB de energía al "
+            "sumarse a mono (posible cancelación de fase por un estéreo muy "
+            "ancho) — puede sonar más floja o rara en dispositivos que "
+            "reproducen en mono. No se toca nada automáticamente, es solo un "
+            "aviso para que lo revises en tu mezcla si quieres."
+        )
+
+
+def _maybe_denoise_step(audio_path):
+    """
+    Siempre se comprueba, pero solo se aplica una reducción de ruido muy
+    conservadora si de verdad se detecta un suelo de ruido de fondo
+    audible — para no arriesgarse a tocar una mezcla que ya está limpia.
+    """
+    from src.audio_hygiene import denoise_if_needed
+    prepared_dir = Path("prepared")
+    prepared_dir.mkdir(exist_ok=True)
+    out_path = str(prepared_dir / f"{Path(audio_path).stem}_denoised.wav")
+    result_path, applied, floor_db = denoise_if_needed(audio_path, out_path)
+    if applied:
+        print(f"-> Ruido de fondo detectado (suelo ~{floor_db:.0f}dB) — aplicando una reducción suave...")
+    return result_path
+
+
 def _normalize_loudness_step(audio_path):
     """
     Siempre se aplica (no hace falta elegir nada): lleva el volumen final
@@ -223,13 +272,17 @@ def _resolve_stock_video_covers(
 
 def _resolve_cover_interactive(artist, title, genre, context, audio_path):
     have_openai = bool(os.environ.get("OPENAI_API_KEY"))
-    have_stock = bool(os.environ.get("PEXELS_API_KEY") or os.environ.get("PIXABAY_API_KEY"))
+    have_stock = bool(
+        os.environ.get("PEXELS_API_KEY") or os.environ.get("PIXABAY_API_KEY")
+        or os.environ.get("COVERR_API_KEY")
+    )
 
     if not have_openai and not have_stock:
         print(
-            "  (Nota: no tienes OPENAI_API_KEY ni PEXELS_API_KEY/PIXABAY_API_KEY "
-            "en tu .env, así que no puedo generar/buscar portadas "
-            "automáticamente. Añade alguna para activarlo la próxima vez.)"
+            "  (Nota: no tienes OPENAI_API_KEY ni PEXELS_API_KEY/PIXABAY_API_KEY/"
+            "COVERR_API_KEY en tu .env, así que no puedo generar/buscar "
+            "portadas automáticamente. Añade alguna para activarlo la "
+            "próxima vez.)"
         )
         cover = ask_path(
             "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
@@ -306,6 +359,9 @@ def main():
     memory = _load_memory()
 
     audio = _maybe_master_audio(audio, memory)
+    audio = _trim_silence_step(audio)
+    _check_mono_compatibility_step(audio)
+    audio = _maybe_denoise_step(audio)
     audio = _normalize_loudness_step(audio)
 
     artist = ask("Artista", memory.get("artist"))

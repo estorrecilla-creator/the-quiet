@@ -84,12 +84,58 @@ def compute_segment_durations(total_duration: float, n_images: int, transition: 
     Duración "en bruto" que debe renderizarse por cada imagen para que,
     tras encadenarlas con transiciones que se solapan `transition`
     segundos entre cada dos, el resultado final dure `total_duration`.
+    Reparto uniforme (mismo tamaño para todos los segmentos).
     """
     if n_images <= 1:
         return [total_duration]
     extra = transition * (n_images - 1) / n_images
     seg = total_duration / n_images + extra
     return [seg] * n_images
+
+
+def _find_beat_synced_cuts(audio_path: str, total_duration: float, n_images: int, snap_window: float = 3.0, sr: int = 22050):
+    """
+    Puntos de corte entre segmentos, repartidos en principio a partes
+    iguales (como `compute_segment_durations`) pero "enganchados" al
+    ataque/onset musical más cercano dentro de `snap_window` segundos —
+    así el cambio de clip cae en un cambio real de la música (entra la
+    batería, remata una frase...) en vez de a mitad de una nota. Si no
+    hay ningún onset cerca de un punto, se deja el reparto uniforme para
+    ese corte (degradación sin errores).
+    """
+    import librosa
+
+    y, sr = librosa.load(audio_path, sr=sr, mono=True)
+    onset_times = librosa.onset.onset_detect(y=y, sr=sr, units="time", backtrack=True)
+
+    ideal_cuts = [total_duration * i / n_images for i in range(1, n_images)]
+    min_gap = (total_duration / n_images) * 0.3
+
+    snapped = []
+    for ideal in ideal_cuts:
+        candidates = [t for t in onset_times if abs(t - ideal) <= snap_window]
+        chosen = min(candidates, key=lambda t: abs(t - ideal)) if candidates else ideal
+        if snapped and chosen - snapped[-1] < min_gap:
+            chosen = snapped[-1] + min_gap
+        chosen = min(chosen, total_duration - 0.5)
+        snapped.append(chosen)
+    return snapped
+
+
+def compute_beat_synced_segment_durations(
+    audio_path: str, total_duration: float, n_images: int, transition: float = TRANSITION_DURATION, snap_window: float = 3.0,
+):
+    """
+    Como `compute_segment_durations`, pero los cortes entre clips caen en
+    un cambio real de la música (ver `_find_beat_synced_cuts`) en vez de
+    repartir el tiempo a partes exactamente iguales entre los clips.
+    """
+    if n_images <= 1:
+        return [total_duration]
+    cut_points = _find_beat_synced_cuts(audio_path, total_duration, n_images, snap_window=snap_window)
+    boundaries = [0.0] + cut_points + [total_duration]
+    extra = transition * (n_images - 1) / n_images
+    return [(boundaries[i + 1] - boundaries[i]) + extra for i in range(n_images)]
 
 
 def build_cover_sequence_filter(

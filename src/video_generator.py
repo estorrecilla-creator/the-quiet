@@ -24,8 +24,9 @@ from src.ffmpeg_utils import escape_path
 from src.star_light import build_star_script, STAR_SIZE
 from src.lyrics import srt_to_ass, subtitles_filter_fragment
 from src.person_mask import extract_person_cutout, blank_rgba_like
-from src.cover_sequence import build_cover_sequence_filter, compute_segment_durations, build_video_clip_chain, MOVEMENTS
+from src.cover_sequence import build_cover_sequence_filter, compute_beat_synced_segment_durations, build_video_clip_chain, MOVEMENTS
 from src.watermark import make_watermark_sticker, watermark_overlay_filter
+from src.cinematic_grade import cinematic_grade_filter
 
 STAR_FPS = 12
 GLOW_ASSET = str(Path(__file__).resolve().parent.parent / "assets" / "glow.png")
@@ -126,7 +127,7 @@ def generate_main_video(
             idx += 1
         else:
             total_duration = _get_audio_duration(audio_path)
-            durations = compute_segment_durations(total_duration, len(covers))
+            durations = compute_beat_synced_segment_durations(audio_path, total_duration, len(covers))
             for img, dur, is_video in zip(covers, durations, covers_are_video):
                 if is_video:
                     input_args += ["-stream_loop", "-1", "-t", f"{dur:.3f}", "-i", img]
@@ -193,6 +194,13 @@ def generate_main_video(
             for c in raw_cutouts:
                 if c:
                     os.remove(c)
+
+        # acabado cinematográfico (viñeta + grano + tinte sutil) sobre la
+        # capa de fondo, antes de la forma de onda/letra/marca de agua
+        # (para no ensuciar la legibilidad del texto ni oscurecer sus
+        # esquinas con la viñeta)
+        filter_complex += f";{cinematic_grade_filter(base_label, 'graded')}"
+        base_label = "graded"
 
         filter_complex += f";[{base_label}][wave]overlay=0:{h - wave_h}:shortest=1[outv0]"
         final_label = "outv0"

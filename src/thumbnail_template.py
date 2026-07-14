@@ -18,13 +18,25 @@ from PIL import Image, ImageDraw, ImageFont
 DEFAULT_FONT = str(Path(__file__).resolve().parent.parent / "assets" / "fonts" / "Jura-Medium.ttf")
 
 
+def _pick_contrasting_text_color(bg_color) -> tuple:
+    """
+    Gris claro sobre fondos oscuros, gris oscuro sobre fondos claros —
+    luminancia relativa estándar (ITU-R BT.709) para decidir cuál toca,
+    en vez de un gris fijo que solo funciona bien sobre fondo negro (como
+    "The Hollow Hour", pero no necesariamente el próximo LP).
+    """
+    r, g, b = bg_color
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return (210, 210, 210) if luminance < 128 else (45, 45, 45)
+
+
 def make_track_thumbnail(
     template_path: str,
     track_title: str,
     out_path: str,
     text_band=(0.85, 0.95),  # (top, bottom) como fracción de la altura
     bg_color=None,  # None = tomarlo de la propia imagen (esquina superior izquierda)
-    text_color=(150, 150, 150),
+    text_color=None,  # None = elegir automáticamente según el contraste con bg_color
     font_path: str = DEFAULT_FONT,
     max_width_ratio: float = 0.85,
 ) -> str:
@@ -46,6 +58,9 @@ def make_track_thumbnail(
         corner = img.crop((0, 0, min(30, w), min(30, h)))
         pixels = list(corner.getdata())
         bg_color = tuple(sum(c) // len(pixels) for c in zip(*pixels))
+
+    if text_color is None:
+        text_color = _pick_contrasting_text_color(bg_color)
 
     top = int(h * text_band[0])
     bottom = int(h * text_band[1])
