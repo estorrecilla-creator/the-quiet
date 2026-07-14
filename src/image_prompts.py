@@ -73,6 +73,15 @@ waiting train station" que "train station". Solo recurre a un objeto sin
 presencia humana/emocional si de verdad no hay forma de expresar la
 emoción de la escena de otra manera.
 
+Regla estricta sobre personas: nunca en primer plano ni mirando a cámara.
+Si una escena incluye una persona, tiene que estar de espaldas, de lejos,
+en silueta, o fuera de foco/en segundo plano — nunca un rostro reconocible
+ni contacto visual con la cámara. Usa términos como "from behind", "distant
+figure", "silhouette", "walking away", "back turned", "far away in frame".
+Evita por completo términos que impliquen rostro o mirada frontal como
+"face", "portrait", "close-up", "looking at camera", "eye contact",
+"selfie".
+
 Cada búsqueda debe ser distinta pero coherente con el resto (mismo
 universo visual/atmósfera). Responde ÚNICAMENTE con JSON válido, sin
 texto adicional ni bloques de markdown."""

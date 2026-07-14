@@ -16,6 +16,20 @@ import requests
 
 PEXELS_SEARCH_URL = "https://api.pexels.com/videos/search"
 
+# Si la URL/slug del vídeo en Pexels contiene alguna de estas palabras, lo
+# descartamos aunque la búsqueda haya devuelto el resultado: la petición es
+# explícita — sin caras reconocibles ni miradas a cámara en primer plano.
+BANNED_TERMS = (
+    "face", "faces", "portrait", "close-up", "closeup", "selfie",
+    "headshot", "head-shot", "eye-contact", "looking-at-camera",
+    "smiling", "smile", "makeup", "make-up",
+)
+
+
+def _looks_like_frontal_person(video: dict) -> bool:
+    slug = (video.get("url") or "").lower()
+    return any(term in slug for term in BANNED_TERMS)
+
 
 def search_stock_clip(
     query: str,
@@ -31,6 +45,9 @@ def search_stock_clip(
     ningún archivo con el lado corto (el que define la resolución real,
     da igual la orientación) de al menos `min_short_side` píxeles, se
     descarta ese vídeo entero — no cae a una versión de menor calidad.
+    También se descartan vídeos cuyo propio título/slug en Pexels sugiera
+    una cara en primer plano o mirando a cámara (ver BANNED_TERMS): si
+    aparece una persona debe ser de espaldas, de lejos o en silueta.
     Devuelve la URL del archivo cuyo lado largo esté más cerca de 1920
     entre los que sí cumplen la calidad mínima, o None si no hay ningún
     resultado válido.
@@ -46,6 +63,8 @@ def search_stock_clip(
 
     for video in data.get("videos", []):
         if video.get("duration", 0) < min_duration:
+            continue
+        if _looks_like_frontal_person(video):
             continue
         files = video.get("video_files", [])
         hd_files = [

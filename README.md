@@ -151,6 +151,13 @@ Condiciones de toda búsqueda:
 - **Emociones antes que objetos**: las búsquedas que genero priorizan
   escenas con una persona/situación que transmita un estado de ánimo
   concreto sobre objetos sueltos sin nadie que los habite.
+- **Sin caras en primer plano ni mirando a cámara**: si una escena incluye
+  una persona, tiene que estar de espaldas, de lejos o en silueta — nunca
+  un rostro reconocible ni contacto visual con la cámara. Esto se aplica
+  en dos capas: al generar las búsquedas (evitando términos como "face",
+  "portrait" o "close-up") y como filtro de seguridad al elegir el
+  resultado (se descarta cualquier vídeo cuyo propio título en Pexels
+  sugiera una cara en primer plano, aunque la búsqueda lo haya devuelto).
 
 Los Shorts ya admiten vídeo real como portada (antes solo imágenes fijas).
 Si no tienes `PEXELS_API_KEY` o no se encuentra un clip vertical, el
