@@ -50,6 +50,26 @@ def resolve_cover(cover_arg):
     return cover_arg
 
 
+def _resolve_single_cover(cover_arg):
+    """
+    Como `resolve_cover`, pero para un sitio que necesita un único archivo
+    (los Shorts no admiten una carpeta/lista, solo una portada). Si
+    `cover_arg` es una carpeta, se queda con el primer archivo válido de
+    dentro en vez de pasar la ruta de la carpeta tal cual (eso rompía la
+    generación del Short más adelante, con un error de "no se puede leer
+    una carpeta como imagen").
+    """
+    path = Path(cover_arg)
+    if path.is_dir():
+        images = sorted(
+            p for p in path.iterdir() if p.suffix.lower() in COVER_EXTENSIONS
+        )
+        if not images:
+            raise ValueError(f"La carpeta {cover_arg} no contiene imágenes ni vídeos (.jpg/.png/.mp4...).")
+        return str(images[0])
+    return cover_arg
+
+
 def process_track(
     audio_path, cover_path, artist, title, genre, context, n_shorts, out_dir,
     lyrics_path=None, lyrics_offset=0.0, shorts_cover_override=None,
@@ -63,7 +83,7 @@ def process_track(
         # portada (imagen o clip) buscada/generada específicamente en
         # orientación vertical para los Shorts, en vez de reutilizar la del
         # vídeo principal (pensada en horizontal).
-        cover_for_shorts = shorts_cover_override
+        cover_for_shorts = _resolve_single_cover(shorts_cover_override)
     elif isinstance(cover, list):
         # sin una portada vertical dedicada: entre las del vídeo principal
         # (pensadas en horizontal), se prefiere una imagen fija a un clip de

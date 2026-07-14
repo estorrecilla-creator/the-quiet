@@ -18,8 +18,17 @@ iluminación, paleta de color, atmósfera), pensados para un generador de
 imágenes de IA. Cada prompt debe ser una escena distinta pero coherente con
 el resto (mismo universo visual/atmósfera), para que al encadenarlas en un
 vídeo con movimiento de cámara se sientan parte del mismo tema. No incluyas
-texto/letras/logos en la imagen. Responde ÚNICAMENTE con JSON válido, sin
-texto adicional ni bloques de markdown."""
+texto/letras/logos en la imagen.
+
+Estética visual por defecto: aspecto vintage de los años 70-80 — grano de
+película analógica, colores algo desaturados o cálidos, textura de
+película antigua, iluminación cinematográfica de esa época (nada de look
+digital limpio/moderno). Añade términos como "vintage film grain",
+"70s film photography", "analog film texture", "faded retro colors" salvo
+que el contexto del tema pida explícitamente otra estética distinta.
+
+Responde ÚNICAMENTE con JSON válido, sin texto adicional ni bloques de
+markdown."""
 
 USER_TEMPLATE = """Genera {n_images} prompts de imagen distintos para las portadas
 de este tema musical.
@@ -81,6 +90,14 @@ figure", "silhouette", "walking away", "back turned", "far away in frame".
 Evita por completo términos que impliquen rostro o mirada frontal como
 "face", "portrait", "close-up", "looking at camera", "eye contact",
 "selfie".
+
+Estética visual por defecto: aspecto vintage de los años 70-80 — busca
+metraje con grano de película analógica, look retro/envejecido, colores
+algo desaturados o cálidos, textura de cine antiguo (nada de vídeo
+digital moderno y limpio). Añade a las búsquedas términos como "vintage
+film grain", "retro 70s film", "super 8 footage", "analog film texture",
+"faded vintage" cuando encajen con la escena, salvo que el contexto del
+tema pida explícitamente otra estética distinta.
 
 Cada búsqueda debe ser distinta pero coherente con el resto (mismo
 universo visual/atmósfera). Responde ÚNICAMENTE con JSON válido, sin

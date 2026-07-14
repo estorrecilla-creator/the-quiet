@@ -16,6 +16,15 @@ MOVEMENTS = ["zoom_in", "zoom_out", "pan_left", "pan_right", "pan_up", "pan_down
 
 TRANSITIONS = ["fadeblack", "fade", "smoothleft", "smoothright", "circleclose", "dissolve"]
 
+# Entre dos imágenes fijas (con zoompan) las transiciones de arriba quedan
+# bien porque el contenido es sencillo/estático. Entre dos CLIPS DE VÍDEO
+# reales, esas mismas transiciones (dissolve, smoothleft/right,
+# circleclose) componen ambos vídeos en pantalla a la vez durante el
+# solape — dos movimientos independientes superpuestos, que se ve confuso
+# y "sucio". Solo "fadeblack" evita eso: cada clip se apaga/enciende
+# contra negro por separado, nunca se ven los dos mezclados directamente.
+VIDEO_SAFE_TRANSITIONS = ["fadeblack"]
+
 TRANSITION_DURATION = 1.8  # segundos de fundido entre imágenes
 
 
@@ -194,7 +203,11 @@ def build_cover_sequence_filter(
     cumulative = durations[0]
     for i in range(1, n_images):
         offset = max(cumulative - transition, 0)
-        trans_type = TRANSITIONS[(i - 1) % len(TRANSITIONS)]
+        both_video = segment_types and segment_types[i - 1] == "video" and segment_types[i] == "video"
+        if both_video:
+            trans_type = VIDEO_SAFE_TRANSITIONS[(i - 1) % len(VIDEO_SAFE_TRANSITIONS)]
+        else:
+            trans_type = TRANSITIONS[(i - 1) % len(TRANSITIONS)]
         joined_label = f"joined{i}_{out_label}" if i < n_images - 1 else f"{out_label}_raw"
         fragments.append(
             f"[{prev}][{seg_labels[i]}]xfade=transition={trans_type}:"

@@ -275,6 +275,10 @@ Condiciones de toda búsqueda (se aplican igual en las tres fuentes):
 - **Emociones antes que objetos**: las búsquedas que genero priorizan
   escenas con una persona/situación que transmita un estado de ánimo
   concreto sobre objetos sueltos sin nadie que los habite.
+- **Estética vintage 70-80 por defecto**: tanto las búsquedas de vídeo
+  como los prompts de imagen con IA incluyen términos de look analógico
+  (grano de película, colores desaturados/cálidos, textura de cine
+  antiguo) salvo que el contexto del tema pida otra cosa.
 - **Sin caras en primer plano ni mirando a cámara**: si una escena incluye
   una persona, tiene que estar de espaldas, de lejos o en silueta — nunca
   un rostro reconocible ni contacto visual con la cámara. Esto se aplica
@@ -304,6 +308,14 @@ los clips descargados y corrige cada uno hacia un punto medio común
 (`eq=brightness` + saturación fija), para que el salto de un clip a otro
 se note menos — además de las transiciones (fundidos, barridos...) que ya
 había entre cada dos.
+
+Entre dos **clips de vídeo real** (no imágenes), la transición nunca es
+un fundido cruzado ni un barrido — esos componen los dos vídeos en
+pantalla a la vez durante el solape (dos movimientos independientes
+superpuestos, que se ve confuso). Ahí se usa siempre un fundido a negro
+(`fadeblack`): cada clip se apaga/enciende contra negro por separado, sin
+mezclar directamente el contenido de los dos. Entre imagen-imagen o
+imagen-vídeo sí se siguen usando las transiciones variadas de siempre.
 
 Los cortes entre clips, además, caen en un cambio real de la música en
 vez de a mitad de una nota: `src/cover_sequence.py` detecta los
