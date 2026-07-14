@@ -271,6 +271,32 @@ def _resolve_stock_video_covers(
     return str(cover_dir)
 
 
+def _match_cover_mode(raw, have_stock, have_openai):
+    """
+    Interpreta la respuesta a "¿tengo las imágenes / vídeo libre de
+    derechos / generar con IA?" de forma flexible — no todo el mundo
+    responde con la letra exacta entre corchetes, a veces se escribe la
+    frase entera ("busca vídeo libre de derechos"). Devuelve "t"/"v"/"g",
+    o None si no se reconoce nada (para que el que llama vuelva a
+    preguntar en vez de asumir un modo no querido).
+    """
+    text = raw.strip().lower()
+
+    if text.startswith("t") or "tengo" in text or "imagen" in text:
+        return "t"
+    if have_stock and (
+        text.startswith("v") or "video" in text or "vídeo" in text
+        or "stock" in text or "libre" in text
+    ):
+        return "v"
+    if have_openai and (
+        text.startswith("g") or "genera" in text or "ia" in text.split()
+        or text.endswith(" ia") or text == "ia"
+    ):
+        return "g"
+    return None
+
+
 def _resolve_cover_interactive(artist, title, genre, context, audio_path):
     have_openai = bool(os.environ.get("OPENAI_API_KEY"))
     have_stock = bool(
@@ -298,20 +324,25 @@ def _resolve_cover_interactive(artist, title, genre, context, audio_path):
         opciones.append("[g]enerar con IA")
     default_modo = "v" if have_stock else "g"
 
-    modo = ask(
-        "¿Ya tienes las imágenes de portada, quieres que busque vídeo libre "
-        f"de derechos, o que las genere con IA? {' / '.join(opciones)}",
-        default_modo,
-    ).strip().lower()
+    while True:
+        raw = ask(
+            "¿Ya tienes las imágenes de portada, quieres que busque vídeo libre "
+            f"de derechos, o que las genere con IA? {' / '.join(opciones)}",
+            default_modo,
+        )
+        modo = _match_cover_mode(raw, have_stock, have_openai)
+        if modo:
+            break
+        print(f"  No he entendido \"{raw}\" — responde con una de estas letras: {' / '.join(opciones)}.")
 
-    if modo.startswith("t"):
+    if modo == "t":
         cover = ask_path(
             "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
             "(cada una tendrá su propio movimiento de cámara)"
         )
         return cover, None
 
-    if modo.startswith("v") and have_stock:
+    if modo == "v":
         suggested_n = _suggest_clip_count(audio_path)
         n_images = int(ask(
             "¿Cuántos clips de vídeo buscamos para el vídeo principal? Cuantos "
