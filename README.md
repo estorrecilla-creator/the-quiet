@@ -114,6 +114,58 @@ Todo queda como **borrador local**. Tú revisas y subes manualmente, o usas
 `programar_youtube.py` para calendarizar y programar la subida automática
 a YouTube (ver más abajo).
 
+## Procesar un LP completo de una vez ("app" de escritorio)
+
+`procesar_lp.py` automatiza el LP entero: le das la carpeta con todos los
+audios y el documento del LP (concepto, letras y estilo por tema, en
+texto libre — no hace falta ninguna plantilla fija, Claude lo interpreta
+igual que lo haría una persona leyéndolo) y genera solo, uno detrás de
+otro, el vídeo principal + Shorts + metadatos de todos los temas, con
+absolutamente todo lo que tiene el pipeline (masterización, normalización
+de volumen, portadas/vídeo de stock, letra karaoke, marca de agua, acabado
+cinematográfico...). Al final, si quieres, también encadena la
+programación/subida a YouTube de todo el LP.
+
+### Configurarlo como app de escritorio (Windows)
+
+1. En el Explorador de Windows, entra en la carpeta `the-quiet`.
+2. Clic derecho sobre `procesar_lp.bat` → **Enviar a** → **Escritorio
+   (crear acceso directo)**.
+3. A partir de ahora: selecciona en el Explorador la carpeta con los
+   audios del LP **y** el documento del LP (.txt) — con las dos cosas
+   seleccionadas a la vez (Ctrl+clic) — y arrástralas juntas sobre el
+   icono del escritorio. Se abre una ventana y arranca solo.
+
+Si haces doble clic en el icono sin arrastrar nada, te pregunta las dos
+rutas a mano (como el resto de asistentes de este proyecto).
+
+### Qué pregunta y qué no
+
+Solo pregunta **una vez** al principio (artista/género, si quieres
+masterizar contra una referencia, los logos de marca de agua, cuántos
+Shorts por tema) y a partir de ahí no vuelve a interrumpir hasta acabar
+los 12 temas. Los audios se emparejan con los temas del documento por
+orden/número (el primer audio con el tema nº1, etc.) — si el número de
+audios y de temas no coincide, te avisa antes de continuar.
+
+Si un tema falla a mitad (por ejemplo, no se encuentra portada para él),
+no para todo el proceso: lo salta, sigue con el resto, y al final te
+enseña un resumen de qué temas fallaron y por qué.
+
+### La fase de YouTube (opcional, al final)
+
+Si aceptas continuar, te pregunta un par de cosas más (idioma, plantilla
+de miniatura, lista de reproducción, enlaces, hora de publicación...) y
+programa la subida de todos los temas, usando las fechas de
+`calendario_lanzamiento.json` (el calendario de lanzamiento del LP que ya
+hayáis calculado con `calendario_lp.py` — hace falta tenerlo generado de
+antes; las fechas de DistroKid son manuales, no hay API pública, así que
+esa parte la sigues decidiendo tú). Como siempre, te enseña el calendario
+completo del LP **antes** de subir nada, y solo sube de verdad si lo
+confirmas explícitamente. Si el proceso se interrumpe a mitad de la
+subida, puedes relanzarlo — retoma donde se quedó en vez de duplicar
+vídeos ya subidos.
+
 ## Preparación del audio (automática, dentro de `subir_tema.py`)
 
 Antes de generar nada, `subir_tema.py` deja el audio en su mejor estado

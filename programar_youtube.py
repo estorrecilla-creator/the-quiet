@@ -13,31 +13,13 @@ Uso:
     python programar_youtube.py
 """
 
-import os
 import re
-import subprocess
 import sys
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from src.release_calendar import build_schedule, save_schedule, load_schedule
-
-
-def _extract_thumbnail(video_path, t=5.0):
-    """
-    Saca un fotograma del vídeo como miniatura personalizada (sin esto,
-    YouTube pone una a medias del vídeo elegida al azar, peor para el
-    click-through). Devuelve None si ffmpeg falla, sin bloquear la subida.
-    """
-    out_path = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False).name
-    result = subprocess.run(
-        ["ffmpeg", "-y", "-ss", str(t), "-i", video_path, "-frames:v", "1", "-q:v", "2", out_path],
-        capture_output=True,
-    )
-    if result.returncode != 0 or not os.path.getsize(out_path):
-        return None
-    return out_path
+from src.release_calendar import build_schedule, load_schedule
+from src.youtube_batch import upload_schedule
 
 
 def _strip_quotes(value):
@@ -138,7 +120,7 @@ def main():
         required=False,
     )
 
-    from src.youtube_uploader import upload_video, get_authenticated_service
+    from src.youtube_uploader import get_authenticated_service
 
     youtube = None
     playlist_id = None
@@ -158,34 +140,10 @@ def main():
     track_position = int(track_number_match.group(1)) - 1 if track_number_match else None
 
     schedule = load_schedule(out_dir)  # por si se editó a mano
-    for item in schedule:
-        print(f"\n-> Subiendo {Path(item['video_path']).name} (programado para {item['publish_at_local']})...")
-        if thumb_template:
-            thumb_out = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False).name
-            from src.thumbnail_template import make_track_thumbnail
-            thumbnail_path = make_track_thumbnail(thumb_template, track_title, thumb_out)
-        else:
-            thumbnail_path = _extract_thumbnail(item["video_path"]) if item["kind"] == "main" else None
-        try:
-            video_id = upload_video(
-                video_path=item["video_path"],
-                title=item["title"],
-                description=item["description"] + link_block,
-                tags=item["tags_youtube"],
-                publish_at=item["publish_at_utc"],
-                thumbnail_path=thumbnail_path,
-                default_language=idioma,
-            )
-            item["video_id"] = video_id
-            save_schedule(schedule, out_dir)
-
-            if playlist_id and item["kind"] == "main":
-                from src.youtube_playlists import add_video_to_playlist
-                add_video_to_playlist(youtube, playlist_id, video_id, position=track_position)
-                print(f"-> Añadido a la lista de reproducción (posición {track_position}).")
-        finally:
-            if thumbnail_path:
-                os.remove(thumbnail_path)
+    upload_schedule(
+        out_dir, schedule, thumb_template=thumb_template, playlist_id=playlist_id,
+        youtube=youtube, link_block=link_block, idioma=idioma, track_position=track_position,
+    )
 
     print("\nListo. Los vídeos están subidos (ocultos) y se publicarán solos en su fecha.")
 
