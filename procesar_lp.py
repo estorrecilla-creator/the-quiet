@@ -139,9 +139,15 @@ def _prepare_audio(audio_path, reference_path, *, title, artist, album=None, gen
     final_path = normalize_loudness(audio_path, final_path)
 
     print("   Limpiando metadatos (fuera cualquier rastro de la herramienta usada para componerlo)...")
+    year = date.today().year
+    publisher = os.environ.get("RELEASE_PUBLISHER", artist)
+    copyright_holder = os.environ.get("RELEASE_COPYRIGHT_HOLDER", artist)
     clean_audio_metadata(
         final_path, title=title, artist=artist, album=album, genre=genre,
-        year=date.today().year, track_number=track_number,
+        year=year, track_number=track_number,
+        composer=artist, lyricist=artist, producer=publisher, publisher=publisher,
+        copyright_text=f"© {year} {copyright_holder}",
+        phonographic_copyright=f"℗ {year} {copyright_holder}",
     )
     return final_path
 

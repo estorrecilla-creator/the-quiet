@@ -404,7 +404,15 @@ def main():
     print("-> Limpiando metadatos del audio (fuera cualquier rastro de la "
           "herramienta usada para componerlo)...")
     from src.metadata_cleaner import clean_audio_metadata
-    clean_audio_metadata(audio, title=title, artist=artist, genre=genre, year=date.today().year)
+    year = date.today().year
+    publisher = os.environ.get("RELEASE_PUBLISHER", artist)
+    copyright_holder = os.environ.get("RELEASE_COPYRIGHT_HOLDER", artist)
+    clean_audio_metadata(
+        audio, title=title, artist=artist, genre=genre, year=year,
+        composer=artist, lyricist=artist, producer=publisher, publisher=publisher,
+        copyright_text=f"© {year} {copyright_holder}",
+        phonographic_copyright=f"℗ {year} {copyright_holder}",
+    )
 
     print(
         "  (Marca de agua de los Shorts: al no tener fondo, el logo "
