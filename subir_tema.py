@@ -13,6 +13,7 @@ Uso:
 import json
 import os
 import sys
+from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -368,6 +369,11 @@ def main():
     title = ask("Título del tema", suggested_title)
     genre = ask("Género/estilo", memory.get("genre"))
     context = ask("Contexto/concepto del tema", memory.get("context"))
+
+    print("-> Limpiando metadatos del audio (fuera cualquier rastro de la "
+          "herramienta usada para componerlo)...")
+    from src.metadata_cleaner import clean_audio_metadata
+    clean_audio_metadata(audio, title=title, artist=artist, genre=genre, year=date.today().year)
 
     print(
         "  (Marca de agua de los Shorts: al no tener fondo, el logo "

@@ -198,8 +198,15 @@ anterior):
    con límite de pico real de -1 dBTP) y re-muestrea a 44.1kHz, para que
    ningún tema del canal suene más flojo/fuerte que otro ni se mezclen
    sample rates distintos entre masters de un mismo LP. Se guarda en
-   `normalized/` — ese es el archivo final: el que se usa para generar
-   los vídeos y el que puedes subir a DistroKid.
+   `normalized/`.
+6. **Limpieza de metadatos** (`src/metadata_cleaner.py`, siempre, el
+   último paso): borra TODOS los metadatos que traiga el archivo —
+   título, artista, comentarios, cualquier ID de generación o rastro de
+   la herramienta usada para componerlo (Suno u otra) — y escribe en su
+   lugar los correctos y limpios (título, artista, género, año, y álbum/
+   número de pista si vienes de `procesar_lp.py`). Este es el archivo
+   final de verdad: el que se usa para generar los vídeos y el que puedes
+   subir a DistroKid, sin ningún rastro de cómo se hizo.
 
 ## Generar las portadas con IA (opcional)
 

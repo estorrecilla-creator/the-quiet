@@ -101,10 +101,11 @@ def _find_audio_files(folder):
     )
 
 
-def _prepare_audio(audio_path, reference_path):
+def _prepare_audio(audio_path, reference_path, *, title, artist, album=None, genre=None, track_number=None):
     from src.mastering import master_audio
     from src.audio_hygiene import trim_silence, check_mono_compatibility, denoise_if_needed
     from src.loudness import normalize_loudness, TARGET_I
+    from src.metadata_cleaner import clean_audio_metadata
 
     if reference_path:
         mastered_dir = Path("mastered")
@@ -135,7 +136,14 @@ def _prepare_audio(audio_path, reference_path):
     normalized_dir.mkdir(exist_ok=True)
     final_path = str(normalized_dir / f"{Path(audio_path).stem}_normalized.wav")
     print(f"   Normalizando a {TARGET_I} LUFS...")
-    return normalize_loudness(audio_path, final_path)
+    final_path = normalize_loudness(audio_path, final_path)
+
+    print("   Limpiando metadatos (fuera cualquier rastro de la herramienta usada para componerlo)...")
+    clean_audio_metadata(
+        final_path, title=title, artist=artist, album=album, genre=genre,
+        year=date.today().year, track_number=track_number,
+    )
+    return final_path
 
 
 def _generate_ai_cover(artist, title, genre, context, n_images=3):
@@ -345,7 +353,11 @@ def main():
         track_title = f"{track['number']}. {track['title']}"
         print(f"\n--- Tema {track['number']}: {track['title']} ---")
         try:
-            prepared_audio = _prepare_audio(str(audio_path), reference_path)
+            prepared_audio = _prepare_audio(
+                str(audio_path), reference_path,
+                title=track["title"], artist=artist, album=lp_title, genre=genre,
+                track_number=track["number"],
+            )
 
             cover, shorts_cover = _resolve_cover_unattended(
                 artist, track_title, genre, track["context"], prepared_audio, have_openai, have_stock,
