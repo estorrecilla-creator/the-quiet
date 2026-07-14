@@ -293,18 +293,29 @@ def main():
     genre = ask("Género/estilo", memory.get("genre"))
     context = ask("Contexto/concepto del tema", memory.get("context"))
 
-    watermark_logo = ask_path(
-        "Ruta al logo en PNG con fondo transparente, para la marca de agua "
-        "(nombre del tema + logo) en la esquina superior de los Shorts "
-        "(opcional, Enter para omitir u opcional si ya la configuraste "
-        "antes)",
+    print(
+        "  (Marca de agua de los Shorts: al no tener fondo, el logo "
+        "necesita una variante clara y otra oscura, para elegir la que "
+        "contraste según el vídeo de cada Short. Puedes dar solo una si "
+        "no tienes las dos.)"
+    )
+    watermark_logo_light = ask_path(
+        "Ruta al logo CLARO (PNG transparente, para fondos oscuros; "
+        "opcional, Enter para omitir)",
         required=False,
-        default=memory.get("watermark_logo"),
+        default=memory.get("watermark_logo_light"),
+    )
+    watermark_logo_dark = ask_path(
+        "Ruta al logo OSCURO (PNG transparente, para fondos claros; "
+        "opcional, Enter para omitir)",
+        required=False,
+        default=memory.get("watermark_logo_dark"),
     )
 
     memory.update({
         "artist": artist, "genre": genre, "context": context,
-        "watermark_logo": watermark_logo,
+        "watermark_logo_light": watermark_logo_light,
+        "watermark_logo_dark": watermark_logo_dark,
     })
     _save_memory(memory)
 
@@ -333,7 +344,8 @@ def main():
         audio, cover, artist, title, genre, context, shorts, "output",
         lyrics_path=lyrics, lyrics_offset=lyrics_offset,
         shorts_cover_override=shorts_cover_override,
-        watermark_logo_path=watermark_logo,
+        watermark_logo_light_path=watermark_logo_light,
+        watermark_logo_dark_path=watermark_logo_dark,
     )
     print(f"\nListo. Revisa la carpeta: {out_dir}")
 

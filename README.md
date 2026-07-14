@@ -262,10 +262,16 @@ casi a todo lo ancho):
   Usa un PNG con fondo transparente (el logo "sin fondo" que comentábamos).
 - **Shorts**: como YouTube no aplica su watermark de canal a los Shorts,
   ahí sí se queman los dos juntos (logo + nombre del tema), también en la
-  esquina superior izquierda. `subir_tema.py` te pregunta la ruta al logo
-  transparente una vez y la recuerda para las siguientes veces
-  (`config/asistente_memoria.json`); si no le das ninguno, el Short lleva
-  solo el nombre del tema, sin logo.
+  esquina superior izquierda. Al no llevar fondo, el logo necesita
+  contraste con lo que tenga detrás en cada Short — por eso `subir_tema.py`
+  te pide **dos variantes**, una clara y otra oscura (basta con una si no
+  tienes las dos). Antes de generar cada Short, `src/watermark.py` mide el
+  brillo medio de la esquina superior izquierda del propio vídeo/imagen de
+  portada de ese Short (muestreando varios fotogramas si es un clip) y
+  elige la variante clara sobre fondos oscuros o la oscura sobre fondos
+  claros — automático, sin tener que mirarlo tema a tema. Las rutas se
+  recuerdan entre ejecuciones (`config/asistente_memoria.json`); si no das
+  ningún logo, el Short lleva solo el nombre del tema.
 
 ### Lo que NO se puede automatizar por API (hazlo a mano en YouTube Studio)
 

@@ -14,11 +14,23 @@ Se coloca siempre arriba a la izquierda a propósito:
     arriba a la derecha -> para no pisarlo, el nuestro va a la izquierda.
 """
 
+import os
+import subprocess
+import tempfile
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from src.color_match import _get_video_duration
+
 DEFAULT_FONT = str(Path(__file__).resolve().parent.parent / "assets" / "fonts" / "Jura-Medium.ttf")
+
+# Zona de la esquina superior izquierda donde se coloca la pegatina, como
+# fracción del ancho/alto del vídeo — más generosa que el tamaño real de la
+# pegatina a propósito, para que el brillo medido sea representativo aunque
+# la escena se mueva un poco durante el Short.
+WATERMARK_REGION_RATIO = (0.35, 0.20)
 
 
 def make_watermark_sticker(
@@ -83,6 +95,59 @@ def make_watermark_sticker(
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     canvas.save(out_path)
     return out_path
+
+
+def _corner_brightness(image: Image.Image, region_ratio=WATERMARK_REGION_RATIO) -> float:
+    w, h = image.size
+    rw, rh = max(int(w * region_ratio[0]), 1), max(int(h * region_ratio[1]), 1)
+    region = np.array(image.convert("L").crop((0, 0, rw, rh)))
+    return region.mean() / 255.0
+
+
+def pick_logo_variant(
+    cover_path: str,
+    logo_light_path: str = None,
+    logo_dark_path: str = None,
+    is_video: bool = False,
+    sample_frames: int = 3,
+    light_threshold: float = 0.5,
+) -> str:
+    """
+    Un logo sin fondo depende del contraste con lo que tenga detrás: elige
+    entre `logo_light_path` (logo claro, para fondos oscuros) y
+    `logo_dark_path` (logo oscuro, para fondos claros) según el brillo
+    medio de la esquina superior izquierda de `cover_path` (la zona donde
+    se coloca la marca de agua) — muestreando varios fotogramas repartidos
+    si es un clip de vídeo, o el propio fotograma si es una imagen fija.
+    Si solo se pasa una variante, se usa esa siempre.
+    """
+    if logo_light_path and not logo_dark_path:
+        return logo_light_path
+    if logo_dark_path and not logo_light_path:
+        return logo_dark_path
+    if not logo_light_path and not logo_dark_path:
+        return None
+
+    if is_video:
+        duration = _get_video_duration(cover_path)
+        values = []
+        for i in range(sample_frames):
+            t = duration * (i + 0.5) / sample_frames
+            frame_path = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False).name
+            try:
+                subprocess.run(
+                    ["ffmpeg", "-y", "-ss", f"{t:.3f}", "-i", cover_path, "-frames:v", "1", frame_path],
+                    capture_output=True,
+                )
+                values.append(_corner_brightness(Image.open(frame_path)))
+            finally:
+                if os.path.exists(frame_path):
+                    os.remove(frame_path)
+        brightness = sum(values) / len(values) if values else 0.5
+    else:
+        brightness = _corner_brightness(Image.open(cover_path))
+
+    return logo_dark_path if brightness > light_threshold else logo_light_path
 
 
 def watermark_overlay_filter(base_label: str, out_label: str, wm_input_idx: int, w: int, margin_ratio: float = 0.03) -> str:

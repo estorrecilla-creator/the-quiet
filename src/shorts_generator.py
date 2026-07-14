@@ -15,7 +15,7 @@ from src.star_light import build_star_script, STAR_SIZE
 from src.lyrics import srt_to_ass, subtitles_filter_fragment
 from src.person_mask import extract_person_cutout
 from src.cover_sequence import build_movement_chain, build_video_clip_chain, MOVEMENTS
-from src.watermark import make_watermark_sticker, watermark_overlay_filter
+from src.watermark import make_watermark_sticker, pick_logo_variant, watermark_overlay_filter
 
 STAR_FPS = 12
 GLOW_ASSET = str(Path(__file__).resolve().parent.parent / "assets" / "glow.png")
@@ -48,7 +48,8 @@ def generate_short(
     lyrics_path: str = None,
     lyrics_offset: float = 0.0,
     track_title: str = None,
-    watermark_logo_path: str = None,
+    watermark_logo_light_path: str = None,
+    watermark_logo_dark_path: str = None,
     watermark_opacity: float = 0.65,
 ):
     duration = end - start
@@ -118,10 +119,13 @@ def generate_short(
             cmd += ["-loop", "1", "-i", person_cutout]
             next_idx = 4
 
-        if track_title or watermark_logo_path:
+        if track_title or watermark_logo_light_path or watermark_logo_dark_path:
+            chosen_logo_path = pick_logo_variant(
+                cover_path, watermark_logo_light_path, watermark_logo_dark_path, is_video=is_video,
+            )
             wm_sticker_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
             make_watermark_sticker(
-                wm_sticker_path, track_title=track_title, logo_path=watermark_logo_path,
+                wm_sticker_path, track_title=track_title, logo_path=chosen_logo_path,
                 opacity=watermark_opacity,
             )
             cmd += ["-loop", "1", "-i", wm_sticker_path]
