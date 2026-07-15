@@ -67,9 +67,21 @@ def _process_lp(lp_dir: Path):
     thumbnails = {int(k): v for k, v in (config.get("thumbnails") or {}).items()}
     track_positions = {int(k): v for k, v in (config.get("track_positions") or {}).items()}
 
+    # los enlaces de streaming (Spotify, Apple Music...) normalmente
+    # llegan días/semanas después de empezar a subir el LP (los añade
+    # tools/enlaces_streaming.py) — se comprueban de nuevo cada día, no
+    # solo en el momento en que se confirmó la subida, para que los
+    # vídeos que todavía no se hayan subido ya los lleven en cuanto
+    # existan.
+    from src.streaming_links import load_streaming_links, build_streaming_block
+    link_block = config.get("link_block", "")
+    streaming_block = build_streaming_block(load_streaming_links(lp_dir))
+    if streaming_block and streaming_block not in link_block:
+        link_block += f"\n\n{streaming_block}"
+
     upload_lp_schedule(
         schedule, schedule_path, thumbnails=thumbnails, playlist_id=playlist_id,
-        youtube=youtube, link_block=config.get("link_block", ""),
+        youtube=youtube, link_block=link_block,
         idioma=config.get("idioma"), track_positions=track_positions,
     )
 

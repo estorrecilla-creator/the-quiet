@@ -76,6 +76,18 @@ todo en carpetas listas para revisión manual antes de subir.
   relanzamientos. `src/lp_dossier.py` ahora también extrae "concept" (el
   concepto/narrativa del álbum entero, no de un tema) para alimentar
   esto.
+- `tools/enlaces_streaming.py` — los enlaces de Spotify/Apple Music/etc.
+  llegan de DistroKid días/semanas después de haber subido el LP a
+  YouTube, así que van aparte: guarda los que pegues
+  (`src/streaming_links.py`, en `MUSICA/<Grupo>/<LP>/
+  enlaces_streaming.json`) y los añade con `append_to_video_description`
+  (nueva en `youtube_uploader.py`, añade al final sin pisar lo que ya
+  hubiera, usando un marcador para no duplicar en relanzamientos) a
+  todos los vídeos/Shorts ya subidos, y con
+  `discografia.update_playlist_streaming_links` a la lista de
+  reproducción. `procesar_lp.py` y `continuar_subida_youtube.py`
+  también los recogen solos si ya existen (o en cuanto aparezcan) para
+  que los vídeos que se suban después también los lleven de fábrica.
 - `setup.sh` — instalación de un solo comando (venv + deps + crea `.env`).
 - `webapp.py` + `templates/` — interfaz web (Flask) para generar contenido
   desde el navegador (incluido Safari en iPhone) sin terminal: formulario de

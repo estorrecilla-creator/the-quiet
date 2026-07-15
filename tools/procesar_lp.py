@@ -436,6 +436,11 @@ def _run_youtube_phase(
     if extra_links:
         link_block += f"\n\n{extra_links}"
 
+    from src.streaming_links import load_streaming_links, build_streaming_block
+    streaming_block = build_streaming_block(load_streaming_links(lp_dir))
+    if streaming_block:
+        link_block += f"\n\n{streaming_block}"
+
     config_path = lp_dir / "config_subida_youtube.json"
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump({

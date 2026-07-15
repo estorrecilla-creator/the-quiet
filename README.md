@@ -16,6 +16,8 @@ the-quiet/
 │   ├── configurar_marca_agua.py      logo como watermark de YouTube (1 vez)
 │   ├── continuar_subida_youtube.py   sigue subiendo un LP (sin preguntar nada,
 │   │                              pensado para la Tarea Programada de Windows)
+│   ├── enlaces_streaming.py      pegar los enlaces de Spotify/Apple Music/etc.
+│   │                              en cuanto los tengas (se enlazan solos)
 │   └── escalar_video.py          dar más nitidez a un clip suelto (opcional)
 ├── *.bat                     accesos directos de Windows a cada asistente de
 │                              tools/ (estos SÍ se quedan en la raíz — son a
@@ -507,6 +509,30 @@ Al confirmar la subida, también te pregunta:
   (`src/discografia.py`, guardado en `MUSICA/<Grupo>/discografia.json`).
 - **Enlaces extra** (redes, web...): lo que pegues se añade tal cual al
   final de la descripción de todos los vídeos/Shorts de esa tanda.
+
+### Enlaces de streaming (Spotify, Apple Music...)
+
+DistroKid tarda en distribuir el LP a las plataformas, así que esos
+enlaces normalmente llegan días o semanas DESPUÉS de haber empezado a
+subir el contenido a YouTube — por eso van aparte, con su propio
+asistente:
+```bash
+python tools/enlaces_streaming.py
+```
+Te pregunta el grupo y el LP (igual que `procesar_lp.py`) y el enlace de
+cada plataforma que tengas (Spotify, Apple Music, YouTube Music, Amazon
+Music, Deezer, Tidal, o un enlace agregador tipo DistroKid HyperFollow —
+todos opcionales). En cuanto los pegas:
+- Se añaden a la descripción de **todos los vídeos y Shorts ya
+  subidos** de ese LP (sin pisar los enlaces que ya llevaran).
+- Se añaden también a su **lista de reproducción**.
+- Los vídeos que todavía no se hayan subido (por la cuota diaria) los
+  llevarán automáticamente en cuanto les toque — no hace falta relanzar
+  nada más.
+
+Puedes volver a lanzarlo cuando quieras (por ejemplo, si al principio
+solo tenías Spotify y luego te llega Apple Music) — no duplica lo que ya
+estaba puesto, solo añade o actualiza lo nuevo.
 
 ### Ajustar el canal (palabras clave, "Acerca de", secciones)
 

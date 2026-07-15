@@ -152,6 +152,28 @@ def update_video_description(video_id: str, description: str):
     youtube.videos().update(part="snippet", body={"id": video_id, "snippet": snippet}).execute()
 
 
+def append_to_video_description(video_id: str, extra_text: str, marker: str = None):
+    """
+    Añade `extra_text` al FINAL de la descripción actual de un vídeo ya
+    subido, sin tocar lo que ya había (por ejemplo, para añadir los
+    enlaces de streaming a vídeos subidos antes de tenerlos, sin pisar
+    los enlaces "escucha el tema completo"/"sigue escuchando" que ya
+    llevaban). Si `marker` aparece ya en la descripción actual, no hace
+    nada — así se puede relanzar sin duplicar el bloque cada vez.
+    """
+    youtube = _get_authenticated_service()
+    current = youtube.videos().list(part="snippet", id=video_id).execute()
+    items = current.get("items", [])
+    if not items:
+        return
+    snippet = items[0]["snippet"]
+    description = snippet.get("description", "")
+    if marker and marker in description:
+        return
+    snippet["description"] = description.rstrip() + "\n\n" + extra_text
+    youtube.videos().update(part="snippet", body={"id": video_id, "snippet": snippet}).execute()
+
+
 if __name__ == "__main__":
     import sys
     import json
