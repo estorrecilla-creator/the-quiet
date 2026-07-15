@@ -38,7 +38,7 @@ Devuelve un JSON con esta forma exacta:
 {{
   "title": "string, máx 100 caracteres, con hook si es short",
   "description": "string, 3-5 líneas, incluye contexto artístico + llamada a la acción",
-  "hashtags": ["#etiqueta1", "#etiqueta2", "... 8-12 hashtags relevantes, mezcla de nicho y genéricos"],
+  "hashtags": ["#etiqueta1", "#etiqueta2", "#etiqueta3", "3-5 hashtags MÁXIMO y muy relevantes — pasarse de 5 hace que YouTube lo clasifique como spam"],
   "tags_youtube": ["palabra clave 1", "palabra clave 2", "... 10-15 tags para el campo de YouTube (no hashtags, keywords sueltas)"]
 }}
 """
@@ -87,7 +87,7 @@ Concepto/narrativa del álbum: {concept}
 Devuelve un JSON con esta forma exacta:
 {{
   "description": "string, 3-6 líneas: qué es el álbum, su concepto/atmósfera, y una llamada a la acción para escucharlo entero de principio a fin",
-  "hashtags": ["#etiqueta1", "#etiqueta2", "... 8-12 hashtags relevantes, mezcla de nicho y genéricos"]
+  "hashtags": ["#etiqueta1", "#etiqueta2", "#etiqueta3", "3-5 hashtags MÁXIMO y muy relevantes — pasarse de 5 hace que YouTube lo clasifique como spam"]
 }}
 """
 
