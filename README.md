@@ -27,6 +27,9 @@ the-quiet/
 │                              contexto, calendario...)
 ├── config/                    credenciales y memoria del asistente (nunca se
 │                              sube a git)
+├── MUSICA/                    <Grupo>/<LP>/ — audios+documento que tú pones,
+│                              y AUDIO_FINAL/ VIDEOS/ SHORTS/ MINIATURAS/ que
+│                              genera procesar_lp.py (tampoco se sube a git)
 └── input/ output/ mastered/ normalized/ prepared/   carpetas de trabajo
                               (se crean solas, tampoco se suben a git)
 ```
@@ -148,58 +151,94 @@ a YouTube (ver más abajo).
 
 ## Procesar un LP completo de una vez ("app" de escritorio)
 
-`procesar_lp.py` automatiza el LP entero: le das la carpeta con todos los
-audios y el documento del LP (concepto, letras y estilo por tema, en
-texto libre — no hace falta ninguna plantilla fija, Claude lo interpreta
-igual que lo haría una persona leyéndolo) y genera solo, uno detrás de
-otro, el vídeo principal + Shorts + metadatos de todos los temas, con
-absolutamente todo lo que tiene el pipeline (masterización, normalización
-de volumen, portadas/vídeo de stock, letra karaoke, marca de agua, acabado
-cinematográfico...). Al final, si quieres, también encadena la
-programación/subida a YouTube de todo el LP.
+`procesar_lp.py` automatiza el LP entero, tema a tema, sin tener que
+arrastrar nada. Genera el vídeo principal + Shorts + metadatos + audio
+final listo para DistroKid de todos los temas, con absolutamente todo lo
+que tiene el pipeline (masterización, normalización de volumen, 15 clips
+de vídeo libre de derechos por tema sin repetirse en todo el LP + 3 Shorts
+por clip con su propio mejor momento de audio y de vídeo, letra karaoke,
+marca de agua, acabado cinematográfico, miniatura por tema...). Al final,
+si quieres, también encadena la programación/subida a YouTube de todo el
+LP de golpe.
+
+### Antes de arrancarlo
+
+Dentro de `MUSICA/`, crea (si no existe ya) una carpeta con el nombre del
+grupo, y dentro de esa una carpeta con el nombre del LP:
+
+```
+MUSICA/
+  <Grupo>/
+    <NombreDelLP>/
+      <audios del LP>.zip  (o una carpeta con los audios dentro)
+      <documento del LP>.txt   (concepto, letras y estilo por tema, en
+                                 texto libre — no hace falta ninguna
+                                 plantilla fija, Claude lo interpreta
+                                 igual que lo haría una persona leyéndolo)
+```
+
+`MUSICA/` no se sube a git (son tus audios/vídeos, contenido tuyo, no
+código) — créala tú la primera vez si no existe.
 
 ### Configurarlo como app de escritorio (Windows)
 
 1. En el Explorador de Windows, entra en la carpeta `the-quiet`.
 2. Clic derecho sobre `procesar_lp.bat` → **Enviar a** → **Escritorio
    (crear acceso directo)**.
-3. A partir de ahora: selecciona en el Explorador la carpeta con los
-   audios del LP (o un **.zip** con ellos dentro — se descomprime solo,
-   no hace falta descomprimirlo a mano) **y** el documento del LP (.txt)
-   — con las dos cosas seleccionadas a la vez (Ctrl+clic) — y arrástralas
-   juntas sobre el icono del escritorio. Se abre una ventana y arranca
-   solo.
-
-Si haces doble clic en el icono sin arrastrar nada, te pregunta las dos
-rutas a mano (como el resto de asistentes de este proyecto) — ahí también
-puedes pegar la ruta a un .zip en vez de a una carpeta ya descomprimida.
+3. A partir de ahora: doble clic en el icono del escritorio. Te pregunta
+   el grupo y el LP (mostrándote los que ya existen en `MUSICA/`, para que
+   no tengas que escribir el nombre exacto de memoria) y coge solo de ahí
+   todo lo que necesita.
 
 ### Qué pregunta y qué no
 
-Solo pregunta **una vez** al principio (artista/género, si quieres
-masterizar contra una referencia, los logos de marca de agua, cuántos
-Shorts por tema) y a partir de ahí no vuelve a interrumpir hasta acabar
-los 12 temas. Los audios se emparejan con los temas del documento por
-orden/número (el primer audio con el tema nº1, etc.) — si el número de
-audios y de temas no coincide, te avisa antes de continuar.
+Pregunta **una vez** al principio (artista/género, si quieres masterizar
+contra una referencia, los logos de marca de agua, la plantilla de
+miniatura, y los 4 primeros singles con sus fechas para calcular el
+calendario de lanzamiento) y a partir de ahí no vuelve a interrumpir hasta
+acabar todos los temas. Los audios se emparejan con los temas del
+documento por orden/número (el primer audio con el tema nº1, etc.) — si el
+número de audios y de temas no coincide, te avisa antes de continuar.
+
+Por cada tema, en cuanto su audio está masterizado/normalizado, genera ya
+su miniatura (la portada del LP con el nombre de ese tema, reutilizada
+después para el vídeo principal y todos sus Shorts) y su audio final
+(listo para subir a DistroKid) en `MUSICA/<Grupo>/<LP>/AUDIO_FINAL/`. Los
+vídeos principales quedan en `VIDEOS/`, los Shorts en `SHORTS/` y las
+miniaturas en `MINIATURAS/`, todo dentro de la carpeta del LP.
 
 Si un tema falla a mitad (por ejemplo, no se encuentra portada para él),
 no para todo el proceso: lo salta, sigue con el resto, y al final te
 enseña un resumen de qué temas fallaron y por qué.
 
+### El calendario de lanzamiento (singles + álbum completo)
+
+Te pregunta cuáles son los 4 primeros lanzamientos (singles), en el orden
+en que saldrán, la fecha del primero y la cadencia entre lanzamientos. Los
+demás temas del LP se publican todos juntos, como álbum completo, después
+del último single. Con eso calcula y guarda
+`MUSICA/<Grupo>/<LP>/calendario_lanzamiento.json` — las fechas de
+DistroKid son manuales (no hay API pública), así que esa parte la sigues
+decidiendo/subiendo tú; el calendario solo te dice cuándo.
+
 ### La fase de YouTube (opcional, al final)
 
-Si aceptas continuar, te pregunta un par de cosas más (idioma, plantilla
-de miniatura, lista de reproducción, enlaces, hora de publicación...) y
-programa la subida de todos los temas, usando las fechas de
-`calendario_lanzamiento.json` (el calendario de lanzamiento del LP que ya
-hayáis calculado con `tools/calendario_lp.py` — hace falta tenerlo generado de
-antes; las fechas de DistroKid son manuales, no hay API pública, así que
-esa parte la sigues decidiendo tú). Como siempre, te enseña el calendario
-completo del LP **antes** de subir nada, y solo sube de verdad si lo
-confirmas explícitamente. Si el proceso se interrumpe a mitad de la
-subida, puedes relanzarlo — retoma donde se quedó en vez de duplicar
-vídeos ya subidos.
+Si aceptas continuar, te pregunta un par de cosas más (idioma, lista de
+reproducción, enlaces, hora del vídeo principal) y calcula el calendario
+completo de publicación de todo el LP: los vídeos principales en sus
+fechas de `calendario_lanzamiento.json`, y los Shorts a razón de 2 al día
+(12:00 y 21:00, hora de España) — mientras se van publicando los temas,
+uno del tema ya publicado y otro de avance del siguiente (antes de que
+esté en streaming, a propósito: es la única excepción deliberada a "nunca
+YouTube antes que streaming"); una vez publicados todos los temas, ambos
+huecos tiran del resto de Shorts sin usar, sin repetir tema el mismo día,
+hasta agotarlos (con 15 clips × 3 Shorts por tema, unos 9 meses de
+publicaciones desde el primer single). Como siempre, te enseña el
+calendario completo **antes** de subir nada, y solo sube de verdad si lo
+confirmas explícitamente — todo de golpe, oculto, con su fecha de
+publicación ya fijada (no hace falta relanzar nada periódicamente). Si el
+proceso se interrumpe a mitad de la subida, puedes relanzarlo — retoma
+donde se quedó en vez de duplicar vídeos ya subidos.
 
 ## Preparación del audio (automática, dentro de `subir_tema.py`)
 

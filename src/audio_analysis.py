@@ -79,6 +79,37 @@ def find_best_moments(
     return selected
 
 
+def find_many_moments(
+    audio_path: str,
+    n: int,
+    clip_duration: float = 15.0,
+    sr: int = 22050,
+):
+    """
+    Como `find_best_moments`, pero pensada para pedir MUCHOS momentos a la
+    vez (ej. 45, uno por cada Short cuando un tema tiene 15 clips de vídeo
+    descargados y se generan 3 Shorts por clip). Si el tema no es lo
+    bastante largo para tener `n` tramos de `clip_duration` segundos sin
+    solaparse el `min_gap` de siempre, lo relaja automáticamente hasta
+    conseguir tantos tramos distintos como se pueda; si aun así no llega a
+    `n`, completa la lista repitiendo en orden los mejores momentos ya
+    encontrados (mismo tramo de audio, combinado con un clip de vídeo
+    distinto cada vez, en vez de fallar o dejar Shorts sin generar).
+    """
+    if n <= 0:
+        return []
+
+    min_gap = clip_duration
+    moments = find_best_moments(audio_path, clip_duration=clip_duration, top_n=n, min_gap=min_gap, sr=sr)
+    while len(moments) < n and min_gap > 1.0:
+        min_gap = max(1.0, min_gap / 2)
+        moments = find_best_moments(audio_path, clip_duration=clip_duration, top_n=n, min_gap=min_gap, sr=sr)
+
+    if moments and len(moments) < n:
+        moments = [moments[i % len(moments)] for i in range(n)]
+    return moments
+
+
 def energy_envelope(
     audio_path: str,
     fps: float = 12.0,

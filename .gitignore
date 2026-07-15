@@ -5,6 +5,7 @@ config/token.json
 config/asistente_memoria.json
 output/
 uploads/
+MUSICA/
 mastered/
 normalized/
 prepared/

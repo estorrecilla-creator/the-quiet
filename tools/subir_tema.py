@@ -226,10 +226,19 @@ def _suggest_clip_count(audio_path, target_seconds=25, max_clips=15, min_clips=3
 
 def _resolve_stock_video_covers(
     artist, title, genre, context, n_images, have_openai, orientation="landscape",
-    min_duration=4.0, homogenize=False,
+    min_duration=4.0, homogenize=False, exclude_urls=None,
 ):
+    """
+    `exclude_urls`: set mutable con las URLs de clips ya usados antes (en
+    este mismo tema o en otros temas del mismo LP) — nunca se repite el
+    mismo clip descargado. Si no se pasa, se crea uno nuevo vacío (solo
+    evita repetirse dentro de esta misma llamada).
+    """
     from src.stock_video import find_stock_clip
     from src.image_prompts import generate_stock_queries
+
+    if exclude_urls is None:
+        exclude_urls = set()
 
     print("-> Generando búsquedas de vídeo de stock a partir del género/contexto "
           "(priorizando emociones sobre objetos)...")
@@ -245,7 +254,10 @@ def _resolve_stock_video_covers(
     for i, query in enumerate(queries, start=1):
         print(f"-> Buscando vídeo libre de derechos ({orientation}) para: {query!r}...")
         clip_path = str(cover_dir / f"{i:02d}.mp4")
-        result = find_stock_clip(query, clip_path, orientation=orientation, min_duration=min_duration)
+        result = find_stock_clip(
+            query, clip_path, orientation=orientation, min_duration=min_duration,
+            exclude_urls=exclude_urls,
+        )
         if result:
             print(f"   Encontrado: {clip_path}")
             covers.append(clip_path)

@@ -30,6 +30,24 @@ todo en carpetas listas para revisión manual antes de subir.
   audio/portada, artista, título, género, contexto, nº de shorts) que llama
   a `process_track()` de `main.py`. Pensado para que Salva no tenga que
   recordar flags de CLI.
+- `tools/procesar_lp.py` — automatiza un LP entero de una vez. Descubre el
+  grupo/LP dentro de `MUSICA/<Grupo>/<LP>/` (sin arrastrar nada), pregunta
+  una vez al principio (incluye los 4 primeros singles para calcular
+  `calendario_lanzamiento.json` con `src/lp_release_calendar.py`), y por
+  cada tema: masteriza/normaliza/limpia metadatos y guarda el audio final en
+  `AUDIO_FINAL/` (listo para DistroKid), genera su miniatura en
+  `MINIATURAS/` (`src/thumbnail_template.py`, reutilizada para vídeo+Shorts),
+  busca 15 clips de vídeo libre de derechos sin repetir ninguno en todo el
+  LP (`exclude_urls` compartido a través de `src/stock_video.py`) y genera 3
+  Shorts por clip (45/tema) con su propio mejor momento de audio
+  (`src/audio_analysis.find_many_moments`) y de vídeo
+  (`src/video_analysis.find_best_video_moment`), guardando vídeos en
+  `VIDEOS/` y Shorts en `SHORTS/`. Al final puede encadenar la programación
+  completa a YouTube (`src/lp_shorts_schedule.py`): 2 Shorts/día (12:00 tema
+  ya publicado, 21:00 avance del siguiente — antes de streaming, a
+  propósito) hasta que salen los 12 temas, y backlog rotando sin repetir
+  tema el mismo día después; todo se sube de golpe con su `publishAt` ya
+  fijado, no hay que relanzar nada periódicamente.
 - `setup.sh` — instalación de un solo comando (venv + deps + crea `.env`).
 - `webapp.py` + `templates/` — interfaz web (Flask) para generar contenido
   desde el navegador (incluido Safari en iPhone) sin terminal: formulario de

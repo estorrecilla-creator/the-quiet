@@ -20,7 +20,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.audio_analysis import find_best_moments
+from src.audio_analysis import find_best_moments, find_many_moments
+from src.video_analysis import find_best_video_moment
 from src.video_generator import generate_main_video
 from src.shorts_generator import generate_short
 from src.metadata_generator import generate_metadata
@@ -74,12 +75,34 @@ def process_track(
     audio_path, cover_path, artist, title, genre, context, n_shorts, out_dir,
     lyrics_path=None, lyrics_offset=0.0, shorts_cover_override=None,
     watermark_logo_light_path=None, watermark_logo_dark_path=None,
+    shorts_out_dir=None, shorts_clips=None, shorts_per_clip=3,
 ):
-    out_dir = Path(out_dir) / title.replace(" ", "_")
+    """
+    `shorts_out_dir`: si se indica, los Shorts se guardan ahí en vez de en
+    `out_dir` (para separar vídeos principales y Shorts en carpetas
+    distintas, ej. VIDEOS/ y SHORTS/ de un LP). Por defecto, igual que
+    siempre: en la misma carpeta que el vídeo principal.
+
+    `shorts_clips`: si se indica (lista de clips de vídeo, ej. los mismos
+    que ya se han buscado para el vídeo principal), genera `shorts_per_clip`
+    Shorts por cada uno de esos clips —cada uno con su propio mejor momento
+    de audio Y su propio mejor momento de vídeo dentro del clip— en vez de
+    usar siempre la misma portada para los `n_shorts` Shorts. Sustituye por
+    completo a `n_shorts`/`shorts_cover_override` cuando se usa.
+    """
+    title_safe = title.replace(" ", "_")
+    out_dir = Path(out_dir) / title_safe
     out_dir.mkdir(parents=True, exist_ok=True)
+    shorts_dir = Path(shorts_out_dir) / title_safe if shorts_out_dir else out_dir
+    shorts_dir.mkdir(parents=True, exist_ok=True)
 
     cover = resolve_cover(cover_path)
-    if shorts_cover_override:
+    if shorts_clips:
+        # el modo "un Short por cada clip descargado" no necesita una
+        # portada única para todos los Shorts, así que no hace falta
+        # resolver `cover_for_shorts` en absoluto.
+        cover_for_shorts = None
+    elif shorts_cover_override:
         # portada (imagen o clip) buscada/generada específicamente en
         # orientación vertical para los Shorts, en vez de reutilizar la del
         # vídeo principal (pensada en horizontal).
@@ -126,30 +149,65 @@ def process_track(
             json.dump(main_meta, f, ensure_ascii=False, indent=2)
 
         # 2. Mejores momentos -> Shorts
-        print(f"-> Detectando {n_shorts} mejores momentos...")
-        moments = find_best_moments(audio_path, top_n=n_shorts)
-
-        for i, moment in enumerate(moments, start=1):
-            print(f"-> Generando Short {i} ({moment['start']:.1f}s - {moment['end']:.1f}s)...")
-            short_path = out_dir / f"short_{i}.mp4"
-            generate_short(
-                audio_path, cover_for_shorts, str(short_path), moment["start"], moment["end"],
-                movement=MOVEMENTS[(i - 1) % len(MOVEMENTS)],
-                lyrics_path=lyrics_srt,
-                lyrics_offset=lyrics_offset,
-                track_title=title,
-                watermark_logo_light_path=watermark_logo_light_path,
-                watermark_logo_dark_path=watermark_logo_dark_path,
+        if shorts_clips:
+            total_shorts = len(shorts_clips) * shorts_per_clip
+            print(
+                f"-> Generando {total_shorts} Shorts ({shorts_per_clip} por "
+                f"cada uno de los {len(shorts_clips)} clips de vídeo)..."
             )
+            moments = find_many_moments(audio_path, total_shorts, clip_duration=15.0)
+            short_i = 0
+            for clip in shorts_clips:
+                for _ in range(shorts_per_clip):
+                    moment = moments[short_i % len(moments)] if moments else {"start": 0.0, "end": 15.0}
+                    moment_duration = moment["end"] - moment["start"]
+                    video_offset = find_best_video_moment(clip, moment_duration)
+                    short_i += 1
+                    print(
+                        f"-> Generando Short {short_i}/{total_shorts} "
+                        f"(clip {Path(clip).name}, audio {moment['start']:.1f}s-{moment['end']:.1f}s, "
+                        f"vídeo desde {video_offset:.1f}s)..."
+                    )
+                    short_path = shorts_dir / f"short_{short_i:02d}.mp4"
+                    generate_short(
+                        audio_path, clip, str(short_path), moment["start"], moment["end"],
+                        movement=MOVEMENTS[(short_i - 1) % len(MOVEMENTS)],
+                        lyrics_path=lyrics_srt,
+                        lyrics_offset=lyrics_offset,
+                        track_title=title,
+                        watermark_logo_light_path=watermark_logo_light_path,
+                        watermark_logo_dark_path=watermark_logo_dark_path,
+                        cover_offset=video_offset,
+                    )
 
-            short_meta = generate_metadata(artist, title, genre, context, content_type="short")
-            with open(out_dir / f"short_{i}_metadata.json", "w", encoding="utf-8") as f:
-                json.dump(short_meta, f, ensure_ascii=False, indent=2)
+                    short_meta = generate_metadata(artist, title, genre, context, content_type="short")
+                    with open(shorts_dir / f"short_{short_i:02d}_metadata.json", "w", encoding="utf-8") as f:
+                        json.dump(short_meta, f, ensure_ascii=False, indent=2)
+        else:
+            print(f"-> Detectando {n_shorts} mejores momentos...")
+            moments = find_best_moments(audio_path, top_n=n_shorts)
+
+            for i, moment in enumerate(moments, start=1):
+                print(f"-> Generando Short {i} ({moment['start']:.1f}s - {moment['end']:.1f}s)...")
+                short_path = shorts_dir / f"short_{i}.mp4"
+                generate_short(
+                    audio_path, cover_for_shorts, str(short_path), moment["start"], moment["end"],
+                    movement=MOVEMENTS[(i - 1) % len(MOVEMENTS)],
+                    lyrics_path=lyrics_srt,
+                    lyrics_offset=lyrics_offset,
+                    track_title=title,
+                    watermark_logo_light_path=watermark_logo_light_path,
+                    watermark_logo_dark_path=watermark_logo_dark_path,
+                )
+
+                short_meta = generate_metadata(artist, title, genre, context, content_type="short")
+                with open(shorts_dir / f"short_{i}_metadata.json", "w", encoding="utf-8") as f:
+                    json.dump(short_meta, f, ensure_ascii=False, indent=2)
     finally:
         if lyrics_is_temp:
             os.remove(lyrics_srt)
 
-    print(f"=== Listo: {out_dir} ===")
+    print(f"=== Listo: vídeo en {out_dir}, Shorts en {shorts_dir} ===")
     return out_dir
 
 

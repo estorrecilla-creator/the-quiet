@@ -46,6 +46,7 @@ def search_pexels_clip(
     min_duration: float = 4.0,
     orientation: str = "landscape",
     min_short_side: int = 720,
+    exclude_urls: set = None,
 ):
     """
     Busca en Pexels un vídeo que encaje con `query`, orientado según
@@ -57,14 +58,17 @@ def search_pexels_clip(
     También se descartan vídeos cuyo propio título/slug en Pexels sugiera
     una cara en primer plano o mirando a cámara (ver BANNED_TERMS): si
     aparece una persona debe ser de espaldas, de lejos o en silueta.
+    `exclude_urls`: URLs ya usadas antes en el mismo LP (para no repetir
+    el mismo clip en ningún tema ni dentro del mismo tema) — se saltan.
     Devuelve la URL del archivo cuyo lado largo esté más cerca de 1920
     entre los que sí cumplen la calidad mínima, o None si no hay ningún
-    resultado válido.
+    resultado válido nuevo.
     """
+    exclude_urls = exclude_urls or set()
     response = requests.get(
         PEXELS_SEARCH_URL,
         headers={"Authorization": api_key},
-        params={"query": query, "orientation": orientation, "per_page": 5},
+        params={"query": query, "orientation": orientation, "per_page": 15},
         timeout=30,
     )
     response.raise_for_status()
@@ -86,6 +90,8 @@ def search_pexels_clip(
             hd_files,
             key=lambda f: abs(max((f.get("width") or 0), (f.get("height") or 0)) - 1920),
         )
+        if chosen["link"] in exclude_urls:
+            continue
         return chosen["link"]
 
     return None
@@ -97,6 +103,7 @@ def search_pixabay_clip(
     min_duration: float = 4.0,
     orientation: str = "landscape",
     min_short_side: int = 720,
+    exclude_urls: set = None,
 ):
     """
     Igual que `search_pexels_clip` pero contra la API de Pixabay. Pixabay
@@ -104,11 +111,12 @@ def search_pixabay_clip(
     diferencia de Pexels), así que la orientación se comprueba a mano
     sobre las dimensiones reales de cada variante descargable. Los tags
     de cada vídeo (en vez del slug de la URL) son los que se comprueban
-    contra BANNED_TERMS.
+    contra BANNED_TERMS. `exclude_urls`: ver `search_pexels_clip`.
     """
+    exclude_urls = exclude_urls or set()
     response = requests.get(
         PIXABAY_SEARCH_URL,
-        params={"key": api_key, "q": query, "per_page": 5, "safesearch": "true"},
+        params={"key": api_key, "q": query, "per_page": 15, "safesearch": "true"},
         timeout=30,
     )
     response.raise_for_status()
@@ -132,6 +140,8 @@ def search_pixabay_clip(
         if not hd_variants:
             continue
         chosen = min(hd_variants, key=lambda v: abs(max(v["width"], v["height"]) - 1920))
+        if chosen["url"] in exclude_urls:
+            continue
         return chosen["url"]
 
     return None
@@ -143,6 +153,7 @@ def search_coverr_clip(
     min_duration: float = 4.0,
     orientation: str = "landscape",
     min_short_side: int = 720,
+    exclude_urls: set = None,
 ):
     """
     Igual que las anteriores pero contra la API de Coverr. Coverr sí
@@ -150,12 +161,13 @@ def search_coverr_clip(
     URL de descarga por vídeo (no varias calidades a elegir), así que la
     comprobación de calidad mínima es sobre esa única variante. El título,
     la descripción y los tags son los que se comprueban contra
-    BANNED_TERMS.
+    BANNED_TERMS. `exclude_urls`: ver `search_pexels_clip`.
     """
+    exclude_urls = exclude_urls or set()
     response = requests.get(
         COVERR_SEARCH_URL,
         headers={"Authorization": f"Bearer {api_key}"},
-        params={"query": query, "page_size": 5, "urls": "true"},
+        params={"query": query, "page_size": 15, "urls": "true"},
         timeout=30,
     )
     response.raise_for_status()
@@ -175,7 +187,7 @@ def search_coverr_clip(
         if min(hit.get("max_width") or 0, hit.get("max_height") or 0) < min_short_side:
             continue
         url = (hit.get("urls") or {}).get("mp4")
-        if url:
+        if url and url not in exclude_urls:
             return url
 
     return None
@@ -221,6 +233,7 @@ def find_stock_clip(
     min_short_side: int = 720,
     pixabay_api_key: str = None,
     coverr_api_key: str = None,
+    exclude_urls: set = None,
 ):
     """
     Busca y descarga en un solo paso. Prueba Pexels, luego Pixabay, luego
@@ -229,6 +242,12 @@ def find_stock_clip(
     entre las tres. Si no encuentra nada o falla en todas, devuelve None
     (no lanza excepción) para poder usar una imagen de IA como respaldo
     sin interrumpir el resto del proceso.
+
+    `exclude_urls`: set mutable con las URLs ya usadas antes (en el mismo
+    tema o en otros temas del mismo LP) — se descartan como candidatas, y
+    si esta búsqueda encuentra una válida nueva, se añade sola a este
+    mismo set antes de devolver, para que la siguiente llamada ya la vea
+    como usada (así nunca se repite el mismo clip en todo el LP).
     """
     pexels_key = api_key or os.environ.get("PEXELS_API_KEY")
     pixabay_key = pixabay_api_key or os.environ.get("PIXABAY_API_KEY")
@@ -245,6 +264,7 @@ def find_stock_clip(
             url = search_fn(
                 query, key, min_duration=min_duration,
                 orientation=orientation, min_short_side=min_short_side,
+                exclude_urls=exclude_urls,
             )
         except requests.RequestException:
             continue
@@ -255,6 +275,8 @@ def find_stock_clip(
         except requests.RequestException:
             continue
         if _is_valid_video(out_path, min_duration=min_duration):
+            if exclude_urls is not None:
+                exclude_urls.add(url)
             return out_path
         # descarga corrupta/incompleta (corte de red a mitad, HTML de
         # error guardado como si fuera vídeo...): la descartamos y

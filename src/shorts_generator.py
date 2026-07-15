@@ -27,10 +27,10 @@ def _is_video_file(path: str) -> bool:
     return Path(path).suffix.lower() in VIDEO_EXTENSIONS
 
 
-def _extract_reference_frame(video_path: str) -> str:
+def _extract_reference_frame(video_path: str, t: float = 0.0) -> str:
     out_path = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False).name
     subprocess.run(
-        ["ffmpeg", "-y", "-i", video_path, "-frames:v", "1", "-q:v", "2", out_path],
+        ["ffmpeg", "-y", "-ss", str(t), "-i", video_path, "-frames:v", "1", "-q:v", "2", out_path],
         capture_output=True,
     )
     return out_path
@@ -52,13 +52,14 @@ def generate_short(
     watermark_logo_light_path: str = None,
     watermark_logo_dark_path: str = None,
     watermark_opacity: float = 0.65,
+    cover_offset: float = 0.0,
 ):
     duration = end - start
     w, h = 1080, 1920
     wave_h = int(h * 0.09)
 
     is_video = _is_video_file(cover_path)
-    reference_image = _extract_reference_frame(cover_path) if is_video else cover_path
+    reference_image = _extract_reference_frame(cover_path, t=cover_offset) if is_video else cover_path
 
     star_script = build_star_script(
         audio_path, reference_image, w, h, fps=STAR_FPS, offset=start, duration=duration
@@ -116,6 +117,8 @@ def generate_short(
 
         cmd = ["ffmpeg", "-y", "-i", audio_path]
         if is_video:
+            if cover_offset:
+                cmd += ["-ss", str(cover_offset)]
             cmd += ["-stream_loop", "-1", "-i", cover_path]
         else:
             cmd += ["-loop", "1", "-i", cover_path]
