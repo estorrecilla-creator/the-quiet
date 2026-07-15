@@ -390,8 +390,9 @@ def _run_youtube_phase(tracks, videos_dir, shorts_dir_root, lp_calendar, thumbna
     print(
         "\n(Aviso: la cuota gratuita de la API de YouTube solo da para unos 5-6 "
         "vídeos subidos al día, muy por debajo de los que tiene un LP entero — "
-        "esto puede tardar varios días en terminar. No pasa nada: cada vez que "
-        "lo lances retoma justo donde se quedó, sin duplicar nada.)"
+        "esto puede tardar varios días/meses en terminar. Una vez confirmes, "
+        "queda todo listo para que el resto se suba SOLO cada día con la Tarea "
+        "Programada de Windows — no hace falta que relances nada a mano.)"
     )
     confirmar = st.ask("\n¿Subir y programar TODO esto en YouTube ahora? [s/N]", "n").lower()
     save_path = lp_dir / "calendario_youtube.json"
@@ -414,10 +415,35 @@ def _run_youtube_phase(tracks, videos_dir, shorts_dir_root, lp_calendar, thumbna
     if extra_links:
         link_block += f"\n\n{extra_links}"
 
+    config_path = lp_dir / "config_subida_youtube.json"
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "thumbnails": {str(k): v for k, v in thumbnails.items()},
+            "link_block": link_block,
+            "playlist_id": playlist_id,
+            "idioma": idioma,
+            "track_positions": {str(k): v for k, v in track_positions.items()},
+        }, f, ensure_ascii=False, indent=2)
+
     upload_lp_schedule(
         schedule, save_path, thumbnails=thumbnails, playlist_id=playlist_id,
         youtube=youtube, link_block=link_block, idioma=idioma, track_positions=track_positions,
     )
+
+    if any(not item.get("video_id") for item in schedule):
+        bat_path = REPO_ROOT / "continuar_subida_youtube.bat"
+        print(
+            "\nPara que el resto se suba SOLO cada día (sin que tengas que "
+            "relanzar nada a mano), configura una Tarea Programada de Windows "
+            "UNA sola vez: abre PowerShell y pega esto (cambia la hora si "
+            "quieres otra distinta a las 09:00):\n\n"
+            f'    schtasks /create /tn "TelvornSubidaYouTube" /tr "{bat_path}" '
+            '/sc daily /st 09:00\n\n'
+            "A partir de ahí, Windows lanzará solo, todos los días a esa hora, "
+            "el siguiente lote de subidas — no hace falta tener PowerShell ni "
+            "este programa abiertos. Puedes revisar el progreso en "
+            f"{REPO_ROOT / 'logs' / 'subida_youtube.log'}."
+        )
 
 
 def main():

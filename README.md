@@ -14,6 +14,8 @@ the-quiet/
 │   ├── calendario_lp.py          calcular fechas de lanzamiento del LP
 │   ├── configurar_canal_youtube.py   palabras clave/descripción del canal (1 vez)
 │   ├── configurar_marca_agua.py      logo como watermark de YouTube (1 vez)
+│   ├── continuar_subida_youtube.py   sigue subiendo un LP (sin preguntar nada,
+│   │                              pensado para la Tarea Programada de Windows)
 │   └── escalar_video.py          dar más nitidez a un clip suelto (opcional)
 ├── *.bat                     accesos directos de Windows a cada asistente de
 │                              tools/ (estos SÍ se quedan en la raíz — son a
@@ -242,10 +244,33 @@ calendario completo **antes** de subir nada, y solo sube de verdad si lo
 confirmas explícitamente — con su fecha de publicación ya fijada por
 adelantado. La cuota gratuita de la API de YouTube solo da para subir
 unos 5-6 vídeos al día (muy por debajo de los ~550 de un LP entero), así
-que la subida en sí se reparte en varias tandas: cada vez que relanzas
-esta fase, sube los que le caben en la cuota del día y sigue justo donde
-lo dejó, sin duplicar nada — no hace falta hacer nada especial, solo
-volver a lanzarlo hasta que diga que están todos subidos.
+que la subida en sí se reparte en varias tandas.
+
+### Que el resto se suba solo, cada día (Tarea Programada de Windows)
+
+En cuanto confirmas la subida, el programa te enseña un comando para
+configurar (UNA sola vez) una Tarea Programada de Windows que se encarga
+del resto — así no hace falta que relances nada a mano cada día:
+
+1. Abre PowerShell y pega el comando que te enseñó `procesar_lp.py` (tiene
+   esta forma, con la ruta de tu carpeta):
+   ```powershell
+   schtasks /create /tn "TelvornSubidaYouTube" /tr "C:\ruta\a\the-quiet\continuar_subida_youtube.bat" /sc daily /st 09:00
+   ```
+2. Listo. Todos los días a esa hora, Windows lanza solo
+   `continuar_subida_youtube.py`, que sube el siguiente lote de vídeos de
+   **todos** los LPs de `MUSICA/` que tengan una subida confirmada y
+   pendiente (no hace falta repetir este paso por cada LP) y se para sola
+   al llegar a la cuota diaria. No hace falta tener PowerShell, este
+   programa ni ninguna ventana abiertos — ni tu usuario iniciado, si el
+   PC está encendido.
+3. El progreso queda registrado en `logs\subida_youtube.log`, por si
+   quieres comprobar qué se subió cada día.
+4. Truco: para que no se salte un día si el PC estaba apagado a esa hora,
+   abre el Programador de tareas de Windows, busca "TelvornSubidaYouTube",
+   entra en sus Propiedades → pestaña Configuración, y marca "Ejecutar la
+   tarea tan pronto como sea posible después de una hora de inicio
+   programada perdida".
 
 ## Preparación del audio (automática, dentro de `subir_tema.py`)
 

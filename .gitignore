@@ -6,6 +6,7 @@ config/asistente_memoria.json
 output/
 uploads/
 MUSICA/
+logs/
 mastered/
 normalized/
 prepared/
