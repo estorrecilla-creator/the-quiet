@@ -162,6 +162,21 @@ def _track_display_title(track):
     return f"{track['number']}. {track['title']}"
 
 
+_INVALID_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def _safe_filename(text: str) -> str:
+    """
+    Quita los caracteres que Windows no permite en nombres de archivo
+    (: / \\ ? * " < > |) sin tocar el resto del texto — para que el
+    nombre del archivo de audio final siga siendo reconocible como el
+    título real del tema, en vez de fallar al guardarlo o quedar con un
+    nombre distinto al del tema.
+    """
+    text = _INVALID_FILENAME_CHARS.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _match_track(raw, tracks):
     raw = raw.strip()
     if raw.isdigit():
@@ -282,7 +297,8 @@ def _prepare_audio(
     print(f"   Normalizando a {TARGET_I} LUFS...")
     scratch_path = normalize_loudness(audio_path, scratch_path)
 
-    final_name = f"{track_number:02d} - {title}.wav" if track_number else f"{title}.wav"
+    safe_title = _safe_filename(title)
+    final_name = f"{track_number:02d} - {safe_title}.wav" if track_number else f"{safe_title}.wav"
     dest = Path(final_dir) / final_name
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(scratch_path, dest)
@@ -576,7 +592,7 @@ def main():
             )
 
             if thumb_template:
-                thumb_out = str(miniaturas_dir / f"{track['title'].replace(' ', '_')}.jpg")
+                thumb_out = str(miniaturas_dir / f"{_safe_filename(track['title']).replace(' ', '_')}.jpg")
                 thumbnails[track["number"]] = make_track_thumbnail(thumb_template, track["title"], thumb_out)
                 print(f"   Miniatura generada: {thumbnails[track['number']]}")
 
