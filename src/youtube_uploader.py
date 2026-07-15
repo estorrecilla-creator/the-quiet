@@ -135,6 +135,23 @@ def upload_video(
     return video_id
 
 
+def update_video_description(video_id: str, description: str):
+    """
+    Cambia la descripción de un vídeo ya subido, sin tocar el resto de
+    metadatos. YouTube exige mandar el "snippet" completo en cada
+    actualización (no solo el campo que cambia), así que primero se lee
+    el snippet actual y solo se sustituye la descripción.
+    """
+    youtube = _get_authenticated_service()
+    current = youtube.videos().list(part="snippet", id=video_id).execute()
+    items = current.get("items", [])
+    if not items:
+        return
+    snippet = items[0]["snippet"]
+    snippet["description"] = description
+    youtube.videos().update(part="snippet", body={"id": video_id, "snippet": snippet}).execute()
+
+
 if __name__ == "__main__":
     import sys
     import json

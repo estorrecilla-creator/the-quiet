@@ -212,24 +212,35 @@ def upload_lp_schedule(
     duplicarlo. `thumbnails`: dict {número_de_tema: ruta_miniatura} — la
     MISMA miniatura del tema se reutiliza para su vídeo principal y todos
     sus Shorts (generada una sola vez, justo tras masterizar ese tema).
+
+    Para mantener al oyente el mayor tiempo posible escuchando la música
+    (no solo viendo Shorts sueltos), enlaza:
+    - Cada Short con el vídeo principal de SU tema ("escucha el tema
+      completo"). Por eso se sube agrupado por tema (el vídeo principal
+      antes que sus Shorts) en vez de en el orden cronológico de
+      publicación — el orden de SUBIDA no afecta cuándo se publica de
+      verdad (eso lo fija `publishAt`), y así el enlace ya está listo sin
+      tener que volver a tocar cada Short después.
+    - Cada vídeo principal con el SIGUIENTE tema del álbum en orden
+      narrativo (para encadenar la escucha de todo el disco), en una
+      segunda pasada al final — solo sobre los vídeos principales (pocos),
+      no sobre los Shorts, para no multiplicar las llamadas a la API.
     """
-    from src.youtube_uploader import upload_video
+    from src.youtube_uploader import upload_video, update_video_description
 
     thumbnails = thumbnails or {}
     track_positions = track_positions or {}
 
-    for item in schedule:
+    def _upload_item(item, extra_description=""):
         if item.get("video_id"):
             print(f"-> {Path(item['video_path']).name} ya estaba subido, lo salto.")
-            continue
-
+            return
         print(f"\n-> Subiendo {Path(item['video_path']).name} (programado para {item['publish_at_local']})...")
         thumbnail_path = thumbnails.get(item["track_number"])
-
         video_id = upload_video(
             video_path=item["video_path"],
             title=item["title"],
-            description=item["description"] + link_block,
+            description=item["description"] + link_block + extra_description,
             tags=item["tags_youtube"],
             publish_at=item["publish_at_utc"],
             thumbnail_path=thumbnail_path,
@@ -237,11 +248,43 @@ def upload_lp_schedule(
         )
         item["video_id"] = video_id
         save_lp_schedule(schedule, save_path)
-
         if playlist_id and item["kind"] == "main":
             from src.youtube_playlists import add_video_to_playlist
             position = track_positions.get(item["track_number"])
             add_video_to_playlist(youtube, playlist_id, video_id, position=position)
             print(f"-> Añadido a la lista de reproducción (posición {position}).")
+
+    track_numbers = sorted({item["track_number"] for item in schedule})
+    main_video_id_by_track = {}
+
+    for tn in track_numbers:
+        track_items = [i for i in schedule if i["track_number"] == tn]
+        main_item = next((i for i in track_items if i["kind"] == "main"), None)
+        if main_item:
+            _upload_item(main_item)
+            if main_item.get("video_id"):
+                main_video_id_by_track[tn] = main_item["video_id"]
+
+        main_id = main_video_id_by_track.get(tn)
+        watch_full_link = (
+            f"\n\n🎧 Escucha el tema completo: https://youtu.be/{main_id}" if main_id else ""
+        )
+        for item in track_items:
+            if item["kind"] == "short":
+                _upload_item(item, extra_description=watch_full_link)
+
+    sorted_tracks = sorted(main_video_id_by_track.keys())
+    for i, tn in enumerate(sorted_tracks[:-1]):
+        next_id = main_video_id_by_track[sorted_tracks[i + 1]]
+        main_item = next(
+            (it for it in schedule if it["track_number"] == tn and it["kind"] == "main"), None,
+        )
+        if main_item and main_item.get("video_id"):
+            full_description = (
+                main_item["description"] + link_block
+                + f"\n\n▶ Sigue escuchando: https://youtu.be/{next_id}"
+            )
+            update_video_description(main_item["video_id"], full_description)
+            print(f"-> Tema {tn} enlazado con el siguiente del álbum.")
 
     return schedule
