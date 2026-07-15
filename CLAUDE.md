@@ -88,6 +88,17 @@ todo en carpetas listas para revisión manual antes de subir.
   reproducción. `procesar_lp.py` y `continuar_subida_youtube.py`
   también los recogen solos si ya existen (o en cuanto aparezcan) para
   que los vídeos que se suban después también los lleven de fábrica.
+- Comentarios automáticos: nuevo `src/youtube_comments.py`
+  (`post_comment`/`update_comment`, requiere el scope
+  `youtube.force-ssl` añadido a `SCOPES` en `youtube_uploader.py` — si el
+  token ya existía de antes con menos permisos, hay que borrar
+  `config/token.json` para reautorizar). `lp_shorts_schedule.py` publica
+  un comentario del canal con los enlaces justo tras subir cada vídeo
+  (guarda `comment_id` en el schedule; fallos al comentar no rompen la
+  subida, solo avisan) y `enlaces_streaming.py` lo actualiza (o publica
+  uno si no había) al añadir los enlaces de streaming. YouTube NO tiene
+  ninguna forma pública vía API de FIJAR un comentario arriba de todo —
+  eso sigue siendo manual, solo se automatiza publicarlo/actualizarlo.
 - `setup.sh` — instalación de un solo comando (venv + deps + crea `.env`).
 - `webapp.py` + `templates/` — interfaz web (Flask) para generar contenido
   desde el navegador (incluido Safari en iPhone) sin terminal: formulario de

@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 load_dotenv(REPO_ROOT / ".env")
 
 import subir_tema as st
-from src.lp_shorts_schedule import load_lp_schedule
+from src.lp_shorts_schedule import load_lp_schedule, save_lp_schedule
 from src.streaming_links import PLATFORMS, build_streaming_block, load_streaming_links, save_streaming_links
 
 MUSICA_DIR = REPO_ROOT / "MUSICA"
@@ -88,17 +88,18 @@ def main():
 
     block = build_streaming_block(links)
 
+    from src.youtube_uploader import get_authenticated_service
+    youtube = get_authenticated_service()
+
     config_path = lp_dir / "config_subida_youtube.json"
     if config_path.exists():
         import json
 
-        from src.youtube_uploader import get_authenticated_service
         from src.discografia import update_playlist_streaming_links
 
         config = json.loads(config_path.read_text(encoding="utf-8"))
         playlist_id = config.get("playlist_id")
         if playlist_id:
-            youtube = get_authenticated_service()
             updated = update_playlist_streaming_links(
                 youtube, group_dir, grupo, playlist_id, links,
             )
@@ -115,9 +116,19 @@ def main():
     print(f"\n-> Añadiendo los enlaces a los {len(uploaded)} vídeos ya subidos...")
     from src.youtube_uploader import append_to_video_description
     from src.streaming_links import BLOCK_MARKER
+    from src.youtube_comments import post_comment, update_comment
 
     for item in uploaded:
         append_to_video_description(item["video_id"], block, marker=BLOCK_MARKER)
+        try:
+            if item.get("comment_id"):
+                update_comment(youtube, item["comment_id"], block)
+            else:
+                comment_id = post_comment(youtube, item["video_id"], block)
+                item["comment_id"] = comment_id
+        except Exception as e:
+            print(f"   Aviso: no se pudo actualizar el comentario de {item['video_id']} ({e}).")
+    save_lp_schedule(schedule, schedule_path)
     print(
         "Listo. Los vídeos que todavía falten por subir (por la cuota "
         "diaria) también los llevarán en cuanto les toque."

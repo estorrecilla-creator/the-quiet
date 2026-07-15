@@ -510,6 +510,22 @@ Al confirmar la subida, también te pregunta:
 - **Enlaces extra** (redes, web...): lo que pegues se añade tal cual al
   final de la descripción de todos los vídeos/Shorts de esa tanda.
 
+### Comentario automático con los enlaces
+
+Además de la descripción, cada vídeo subido lleva un comentario del
+propio canal con esos mismos enlaces (mucha gente no despliega la
+descripción, pero sí lee los comentarios de arriba). **Aviso**: YouTube
+no tiene ninguna forma pública, vía API, de FIJAR un comentario arriba de
+todo — eso hay que hacerlo tú a mano, una vez, desde YouTube Studio o la
+propia web, si quieres que se vea el primero. Esto solo se encarga de
+publicarlo, no de fijarlo.
+
+Si vienes de una versión anterior sin esta función, la primera vez que
+publique un comentario puede pedirte volver a autorizar la cuenta
+(permiso ampliado) — borra `config/token.json` si te da un error de
+permisos y vuelve a lanzar el programa; se abre el navegador un momento,
+como la primera vez.
+
 ### Enlaces de streaming (Spotify, Apple Music...)
 
 DistroKid tarda en distribuir el LP a las plataformas, así que esos

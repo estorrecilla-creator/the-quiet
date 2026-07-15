@@ -209,12 +209,14 @@ def load_lp_schedule(path):
 # Costes aproximados en unidades de cuota de la API de YouTube (no son
 # exactos al 100%, pero de sobra para no pasarnos): subir un vídeo cuesta
 # 1600, ponerle miniatura 50, añadirlo a una lista de reproducción 50,
-# actualizar su descripción ~50. La cuota gratuita por defecto es 10.000
-# unidades/día — con eso solo caben ~5-6 vídeos subidos al día.
+# actualizar su descripción ~50, publicar un comentario ~50. La cuota
+# gratuita por defecto es 10.000 unidades/día — con eso solo caben ~5-6
+# vídeos subidos al día.
 COST_VIDEO_INSERT = 1600
 COST_THUMBNAIL_SET = 50
 COST_PLAYLIST_INSERT = 50
 COST_VIDEO_UPDATE = 50
+COST_COMMENT_INSERT = 50
 DEFAULT_DAILY_QUOTA_BUDGET = 9000  # margen de seguridad bajo las 10.000 de por defecto
 
 
@@ -272,12 +274,19 @@ def upload_lp_schedule(
     quota_exhausted = False
 
     def _estimate_cost(item):
-        cost = COST_VIDEO_INSERT
+        cost = COST_VIDEO_INSERT + COST_COMMENT_INSERT
         if thumbnails.get(item["track_number"]):
             cost += COST_THUMBNAIL_SET
         if playlist_id and item["kind"] == "main":
             cost += COST_PLAYLIST_INSERT
         return cost
+
+    def _get_youtube():
+        nonlocal youtube
+        if youtube is None:
+            from src.youtube_uploader import get_authenticated_service
+            youtube = get_authenticated_service()
+        return youtube
 
     def _upload_item(item, extra_description=""):
         nonlocal quota_used, quota_exhausted
@@ -317,6 +326,16 @@ def upload_lp_schedule(
             position = track_positions.get(item["track_number"])
             add_video_to_playlist(youtube, playlist_id, video_id, position=position)
             print(f"-> Añadido a la lista de reproducción (posición {position}).")
+
+        comment_text = (extra_description + link_block).strip()
+        if comment_text:
+            try:
+                from src.youtube_comments import post_comment
+                item["comment_id"] = post_comment(_get_youtube(), video_id, comment_text)
+                save_lp_schedule(schedule, save_path)
+                print("-> Comentario publicado con los enlaces (recuerda fijarlo tú si quieres verlo arriba de todo — eso no lo puede hacer la API).")
+            except Exception as e:
+                print(f"   Aviso: no se pudo publicar el comentario ({e}). El vídeo sigue subido bien.")
 
     track_numbers = sorted({item["track_number"] for item in schedule})
     main_video_id_by_track = {}
