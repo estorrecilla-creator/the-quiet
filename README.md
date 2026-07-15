@@ -189,8 +189,10 @@ MUSICA/
 código) — créala tú la primera vez si no existe.
 
 Si quieres masterizar los temas contra canciones de referencia (y no
-todos contra la misma), pon los `.wav`/`.mp3` de referencia sueltos en
-esa misma carpeta con este nombre:
+todos contra la misma), pon los `.wav`/`.mp3` de referencia con este
+nombre, sueltos en la carpeta del LP o en la del grupo (`MUSICA/<Grupo>/`
+— útil si quieres reutilizar las mismas referencias en varios LPs del
+mismo grupo; si hay conflicto, manda la del LP):
 
 ```
 referencia_base.wav        cualquier tema que no tenga una más específica

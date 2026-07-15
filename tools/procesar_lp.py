@@ -192,10 +192,30 @@ def _parse_reference_track_numbers(stem: str):
     return [int(n) for n in re.findall(r"\d+", m.group(1))]
 
 
+def _scan_reference_dir(directory):
+    base = None
+    overrides = {}
+    candidates = [
+        p for ext in _REFERENCE_EXTENSIONS
+        for p in Path(directory).glob(f"referencia*{ext}")
+    ]
+    for p in sorted(candidates):
+        stem = p.stem.lower()
+        if stem in ("referencia_base", "referencia"):
+            base = str(p)
+            continue
+        for tn in _parse_reference_track_numbers(stem):
+            overrides[tn] = str(p)
+    return base, overrides
+
+
 def _discover_track_references(lp_dir):
     """
-    Busca en la carpeta del LP archivos de referencia de mastering con
-    este convenio de nombres:
+    Busca archivos de referencia de mastering con este convenio de
+    nombres, primero en la carpeta del LP y luego en la del grupo
+    (`MUSICA/<Grupo>/`, para referencias que quieras reutilizar entre
+    varios LPs del mismo grupo — lo específico del LP manda si hay
+    conflicto):
       - referencia_base.wav (o .mp3)   -> por defecto, para cualquier
         tema que no tenga una referencia propia más específica.
       - referencia_temaN.wav           -> solo para el tema N.
@@ -205,17 +225,12 @@ def _discover_track_references(lp_dir):
     """
     base = None
     overrides = {}
-    candidates = [
-        p for ext in _REFERENCE_EXTENSIONS
-        for p in Path(lp_dir).glob(f"referencia*{ext}")
-    ]
-    for p in sorted(candidates):
-        stem = p.stem.lower()
-        if stem in ("referencia_base", "referencia"):
-            base = str(p)
-            continue
-        for tn in _parse_reference_track_numbers(stem):
-            overrides[tn] = str(p)
+    for directory in (Path(lp_dir), Path(lp_dir).parent):
+        found_base, found_overrides = _scan_reference_dir(directory)
+        if base is None:
+            base = found_base
+        for tn, path in found_overrides.items():
+            overrides.setdefault(tn, path)
     return base, overrides
 
 
@@ -578,7 +593,7 @@ def main():
     if do_master.startswith("s"):
         found_base, found_overrides = _discover_track_references(lp_dir)
         if found_base or found_overrides:
-            print("\n-> Referencias de mastering encontradas en la carpeta del LP:")
+            print("\n-> Referencias de mastering encontradas:")
             if found_base:
                 print(f"   Base (resto de temas): {found_base}")
             for tn in sorted(found_overrides):
