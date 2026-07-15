@@ -17,9 +17,14 @@ acordadas con Salva durante el recorrido de todo el flujo:
   hasta agotar la bolsa completa (con 15 clips x 3 Shorts por tema, unos
   540 Shorts en total, ~9 meses de publicaciones desde el primer single).
 
-Se calcula todo de una vez (nada que relanzar periódicamente): el
-resultado son las fechas exactas de publicación de cada vídeo/Short, que
-`upload_lp_schedule` sube todo oculto con su `publishAt` ya fijado.
+El CALENDARIO se calcula todo de una vez: el resultado son las fechas
+exactas de publicación de cada vídeo/Short, que `upload_lp_schedule` sube
+oculto con su `publishAt` ya fijado. La SUBIDA en sí, en cambio, sí hay que
+repartirla en varios días — la cuota gratuita de la API de YouTube (10.000
+unidades/día) solo da para ~5-6 vídeos subidos al día, muy por debajo de
+los ~550 vídeos de un LP — así que `upload_lp_schedule` sube los que le
+caben en la cuota del día y se para solo, sin duplicar nada ni perder el
+sitio: basta con relanzar la misma fase en días sucesivos hasta terminar.
 """
 
 import json
@@ -201,17 +206,42 @@ def load_lp_schedule(path):
         return json.load(f)
 
 
+# Costes aproximados en unidades de cuota de la API de YouTube (no son
+# exactos al 100%, pero de sobra para no pasarnos): subir un vídeo cuesta
+# 1600, ponerle miniatura 50, añadirlo a una lista de reproducción 50,
+# actualizar su descripción ~50. La cuota gratuita por defecto es 10.000
+# unidades/día — con eso solo caben ~5-6 vídeos subidos al día.
+COST_VIDEO_INSERT = 1600
+COST_THUMBNAIL_SET = 50
+COST_PLAYLIST_INSERT = 50
+COST_VIDEO_UPDATE = 50
+DEFAULT_DAILY_QUOTA_BUDGET = 9000  # margen de seguridad bajo las 10.000 de por defecto
+
+
+def _is_quota_error(exc) -> bool:
+    from googleapiclient.errors import HttpError
+    if not isinstance(exc, HttpError):
+        return False
+    reason = ""
+    try:
+        reason = (exc.error_details[0].get("reason", "") if exc.error_details else "")
+    except (AttributeError, IndexError, TypeError):
+        pass
+    text = f"{reason} {exc}".lower()
+    return "quota" in text or "dailylimit" in text
+
+
 def upload_lp_schedule(
     schedule, save_path, thumbnails=None, playlist_id=None, youtube=None,
     link_block: str = "", idioma: str = None, track_positions=None,
+    daily_quota_budget: int = DEFAULT_DAILY_QUOTA_BUDGET,
 ):
     """
     Sube (programada) cada elemento de `schedule`, guardando el progreso
-    tras cada subida — si se corta a mitad (algo casi seguro subiendo un
-    LP entero de golpe), al relanzarlo se salta lo ya subido en vez de
-    duplicarlo. `thumbnails`: dict {número_de_tema: ruta_miniatura} — la
-    MISMA miniatura del tema se reutiliza para su vídeo principal y todos
-    sus Shorts (generada una sola vez, justo tras masterizar ese tema).
+    tras cada subida — si se corta a mitad, al relanzarlo se salta lo ya
+    subido en vez de duplicarlo. `thumbnails`: dict {número_de_tema: ruta_
+    miniatura} — la MISMA miniatura del tema se reutiliza para su vídeo
+    principal y todos sus Shorts.
 
     Para mantener al oyente el mayor tiempo posible escuchando la música
     (no solo viendo Shorts sueltos), enlaza:
@@ -223,30 +253,64 @@ def upload_lp_schedule(
       tener que volver a tocar cada Short después.
     - Cada vídeo principal con el SIGUIENTE tema del álbum en orden
       narrativo (para encadenar la escucha de todo el disco), en una
-      segunda pasada al final — solo sobre los vídeos principales (pocos),
-      no sobre los Shorts, para no multiplicar las llamadas a la API.
+      segunda pasada — solo sobre los vídeos principales (pocos), no
+      sobre los Shorts, para no multiplicar las llamadas a la API.
+
+    Un LP entero (~550 vídeos) no cabe en la cuota diaria gratuita de la
+    API de YouTube (10.000 unidades/día, ~5-6 vídeos), así que esta
+    función sube los que le caben en `daily_quota_budget` y se para sola
+    —sin error, sin perder el sitio— en cuanto se acerca al límite (o en
+    cuanto Google la rechaza de verdad por cuota, como red de seguridad
+    extra). Basta con volver a llamarla (relanzando esta fase desde
+    `procesar_lp.py`) en días sucesivos hasta terminar.
     """
     from src.youtube_uploader import upload_video, update_video_description
 
     thumbnails = thumbnails or {}
     track_positions = track_positions or {}
+    quota_used = 0
+    quota_exhausted = False
+
+    def _estimate_cost(item):
+        cost = COST_VIDEO_INSERT
+        if thumbnails.get(item["track_number"]):
+            cost += COST_THUMBNAIL_SET
+        if playlist_id and item["kind"] == "main":
+            cost += COST_PLAYLIST_INSERT
+        return cost
 
     def _upload_item(item, extra_description=""):
+        nonlocal quota_used, quota_exhausted
         if item.get("video_id"):
             print(f"-> {Path(item['video_path']).name} ya estaba subido, lo salto.")
             return
+        if quota_exhausted:
+            return
+        cost = _estimate_cost(item)
+        if quota_used + cost > daily_quota_budget:
+            quota_exhausted = True
+            return
+
         print(f"\n-> Subiendo {Path(item['video_path']).name} (programado para {item['publish_at_local']})...")
         thumbnail_path = thumbnails.get(item["track_number"])
-        video_id = upload_video(
-            video_path=item["video_path"],
-            title=item["title"],
-            description=item["description"] + link_block + extra_description,
-            tags=item["tags_youtube"],
-            publish_at=item["publish_at_utc"],
-            thumbnail_path=thumbnail_path,
-            default_language=idioma,
-        )
+        try:
+            video_id = upload_video(
+                video_path=item["video_path"],
+                title=item["title"],
+                description=item["description"] + link_block + extra_description,
+                tags=item["tags_youtube"],
+                publish_at=item["publish_at_utc"],
+                thumbnail_path=thumbnail_path,
+                default_language=idioma,
+            )
+        except Exception as e:
+            if _is_quota_error(e):
+                print("   Cuota de YouTube agotada de verdad (Google lo ha rechazado) — paro aquí por hoy.")
+                quota_exhausted = True
+                return
+            raise
         item["video_id"] = video_id
+        quota_used += cost
         save_lp_schedule(schedule, save_path)
         if playlist_id and item["kind"] == "main":
             from src.youtube_playlists import add_video_to_playlist
@@ -258,6 +322,8 @@ def upload_lp_schedule(
     main_video_id_by_track = {}
 
     for tn in track_numbers:
+        if quota_exhausted:
+            break
         track_items = [i for i in schedule if i["track_number"] == tn]
         main_item = next((i for i in track_items if i["kind"] == "main"), None)
         if main_item:
@@ -270,21 +336,46 @@ def upload_lp_schedule(
             f"\n\n🎧 Escucha el tema completo: https://youtu.be/{main_id}" if main_id else ""
         )
         for item in track_items:
+            if quota_exhausted:
+                break
             if item["kind"] == "short":
                 _upload_item(item, extra_description=watch_full_link)
 
-    sorted_tracks = sorted(main_video_id_by_track.keys())
-    for i, tn in enumerate(sorted_tracks[:-1]):
-        next_id = main_video_id_by_track[sorted_tracks[i + 1]]
-        main_item = next(
-            (it for it in schedule if it["track_number"] == tn and it["kind"] == "main"), None,
-        )
-        if main_item and main_item.get("video_id"):
+    if not quota_exhausted or quota_used + COST_VIDEO_UPDATE <= daily_quota_budget:
+        sorted_tracks = sorted(main_video_id_by_track.keys())
+        for i, tn in enumerate(sorted_tracks[:-1]):
+            main_item = next(
+                (it for it in schedule if it["track_number"] == tn and it["kind"] == "main"), None,
+            )
+            if not main_item or not main_item.get("video_id") or main_item.get("linked_next"):
+                continue
+            if quota_used + COST_VIDEO_UPDATE > daily_quota_budget:
+                break
+            next_id = main_video_id_by_track[sorted_tracks[i + 1]]
             full_description = (
                 main_item["description"] + link_block
                 + f"\n\n▶ Sigue escuchando: https://youtu.be/{next_id}"
             )
-            update_video_description(main_item["video_id"], full_description)
+            try:
+                update_video_description(main_item["video_id"], full_description)
+            except Exception as e:
+                if _is_quota_error(e):
+                    break
+                raise
+            main_item["linked_next"] = True
+            quota_used += COST_VIDEO_UPDATE
+            save_lp_schedule(schedule, save_path)
             print(f"-> Tema {tn} enlazado con el siguiente del álbum.")
+
+    total = len(schedule)
+    subidos = sum(1 for i in schedule if i.get("video_id"))
+    if subidos < total:
+        print(
+            f"\n-> Subidos {subidos}/{total} por hoy (cuota diaria de YouTube agotada). "
+            "Vuelve a lanzar esta fase de nuevo (hoy más tarde o cualquier otro día) "
+            "para seguir — no se duplica nada, retoma donde lo hemos dejado."
+        )
+    else:
+        print(f"\n-> Los {total} vídeos del LP están subidos.")
 
     return schedule

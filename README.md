@@ -233,12 +233,19 @@ esté en streaming, a propósito: es la única excepción deliberada a "nunca
 YouTube antes que streaming"); una vez publicados todos los temas, ambos
 huecos tiran del resto de Shorts sin usar, sin repetir tema el mismo día,
 hasta agotarlos (con 15 clips × 3 Shorts por tema, unos 9 meses de
-publicaciones desde el primer single). Como siempre, te enseña el
+publicaciones desde el primer single). Cada Short enlaza en su
+descripción con el vídeo principal de su propio tema ("escucha el tema
+completo") y cada vídeo principal con el siguiente tema del álbum
+("sigue escuchando"), para mantener al oyente encadenado escuchando la
+música en vez de saltar a otro canal. Como siempre, te enseña el
 calendario completo **antes** de subir nada, y solo sube de verdad si lo
-confirmas explícitamente — todo de golpe, oculto, con su fecha de
-publicación ya fijada (no hace falta relanzar nada periódicamente). Si el
-proceso se interrumpe a mitad de la subida, puedes relanzarlo — retoma
-donde se quedó en vez de duplicar vídeos ya subidos.
+confirmas explícitamente — con su fecha de publicación ya fijada por
+adelantado. La cuota gratuita de la API de YouTube solo da para subir
+unos 5-6 vídeos al día (muy por debajo de los ~550 de un LP entero), así
+que la subida en sí se reparte en varias tandas: cada vez que relanzas
+esta fase, sube los que le caben en la cuota del día y sigue justo donde
+lo dejó, sin duplicar nada — no hace falta hacer nada especial, solo
+volver a lanzarlo hasta que diga que están todos subidos.
 
 ## Preparación del audio (automática, dentro de `subir_tema.py`)
 

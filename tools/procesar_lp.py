@@ -387,6 +387,12 @@ def _run_youtube_phase(tracks, videos_dir, shorts_dir_root, lp_calendar, thumbna
     for item in mains:
         print(f"  [{item['publish_at_local']}]  {Path(item['video_path']).name}")
 
+    print(
+        "\n(Aviso: la cuota gratuita de la API de YouTube solo da para unos 5-6 "
+        "vídeos subidos al día, muy por debajo de los que tiene un LP entero — "
+        "esto puede tardar varios días en terminar. No pasa nada: cada vez que "
+        "lo lances retoma justo donde se quedó, sin duplicar nada.)"
+    )
     confirmar = st.ask("\n¿Subir y programar TODO esto en YouTube ahora? [s/N]", "n").lower()
     save_path = lp_dir / "calendario_youtube.json"
     if not confirmar.startswith("s"):
@@ -412,8 +418,6 @@ def _run_youtube_phase(tracks, videos_dir, shorts_dir_root, lp_calendar, thumbna
         schedule, save_path, thumbnails=thumbnails, playlist_id=playlist_id,
         youtube=youtube, link_block=link_block, idioma=idioma, track_positions=track_positions,
     )
-
-    print("\nListo. Todo el LP está subido (oculto) y se publicará solo en sus fechas.")
 
 
 def main():
