@@ -188,6 +188,21 @@ MUSICA/
 `MUSICA/` no se sube a git (son tus audios/vídeos, contenido tuyo, no
 código) — créala tú la primera vez si no existe.
 
+Si quieres masterizar los temas contra canciones de referencia (y no
+todos contra la misma), pon los `.wav`/`.mp3` de referencia sueltos en
+esa misma carpeta con este nombre:
+
+```
+referencia_base.wav        cualquier tema que no tenga una más específica
+referencia_temaN.wav       solo para el tema N
+referencia_temaN_M.wav     para los temas N y M a la vez
+```
+
+El programa los detecta solos por el nombre y te enseña qué ha
+encontrado antes de usarlos — no hace falta indicar la ruta de cada uno
+a mano. Si no sigues este convenio, sigue preguntando una única
+referencia para todo el LP, como antes.
+
 ### Configurarlo como app de escritorio (Windows)
 
 1. En el Explorador de Windows, entra en la carpeta `the-quiet`.

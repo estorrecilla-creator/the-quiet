@@ -177,6 +177,48 @@ def _safe_filename(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+# --------------------------------------------------------------------
+# Masterización con distinta canción de referencia según el tema
+# --------------------------------------------------------------------
+
+_REFERENCE_EXTENSIONS = (".wav", ".mp3")
+_REFERENCE_TEMA_RE = re.compile(r"referencia_tema([\d_\-]+)$", re.IGNORECASE)
+
+
+def _parse_reference_track_numbers(stem: str):
+    m = _REFERENCE_TEMA_RE.match(stem)
+    if not m:
+        return []
+    return [int(n) for n in re.findall(r"\d+", m.group(1))]
+
+
+def _discover_track_references(lp_dir):
+    """
+    Busca en la carpeta del LP archivos de referencia de mastering con
+    este convenio de nombres:
+      - referencia_base.wav (o .mp3)   -> por defecto, para cualquier
+        tema que no tenga una referencia propia más específica.
+      - referencia_temaN.wav           -> solo para el tema N.
+      - referencia_temaN_M.wav         -> para los temas N y M (tantos
+        números separados por "_" o "-" como haga falta).
+    Devuelve (ruta_base_o_None, {número_de_tema: ruta}).
+    """
+    base = None
+    overrides = {}
+    candidates = [
+        p for ext in _REFERENCE_EXTENSIONS
+        for p in Path(lp_dir).glob(f"referencia*{ext}")
+    ]
+    for p in sorted(candidates):
+        stem = p.stem.lower()
+        if stem in ("referencia_base", "referencia"):
+            base = str(p)
+            continue
+        for tn in _parse_reference_track_numbers(stem):
+            overrides[tn] = str(p)
+    return base, overrides
+
+
 def _match_track(raw, tracks):
     raw = raw.strip()
     if raw.isdigit():
@@ -530,11 +572,27 @@ def main():
     concept = dossier.get("concept", "")
     memory.update({"artist": artist, "genre": genre})
 
-    do_master = st.ask("¿Masterizar todos los temas contra una misma canción de referencia? [s/N]", "n").lower()
+    do_master = st.ask("¿Masterizar los temas contra alguna canción de referencia? [s/N]", "n").lower()
     reference_path = None
+    track_references = {}
     if do_master.startswith("s"):
-        reference_path = st.ask_path("Ruta a la canción de referencia (mp3/wav)", default=memory.get("reference_track"))
-        memory["reference_track"] = reference_path
+        found_base, found_overrides = _discover_track_references(lp_dir)
+        if found_base or found_overrides:
+            print("\n-> Referencias de mastering encontradas en la carpeta del LP:")
+            if found_base:
+                print(f"   Base (resto de temas): {found_base}")
+            for tn in sorted(found_overrides):
+                print(f"   Tema {tn}: {found_overrides[tn]}")
+            usar = st.ask("¿Usar estas referencias tal cual? [S/n]", "s").lower()
+            if usar.startswith("s"):
+                reference_path = found_base
+                track_references = found_overrides
+        if reference_path is None and not track_references:
+            reference_path = st.ask_path(
+                "Ruta a la canción de referencia (mp3/wav) para todos los temas",
+                default=memory.get("reference_track"),
+            )
+            memory["reference_track"] = reference_path
 
     watermark_logo_light = st.ask_path(
         "Ruta al logo CLARO para la marca de agua de los Shorts (PNG transparente, opcional, Enter para omitir)",
@@ -584,8 +642,11 @@ def main():
         track_title = _track_display_title(track)
         print(f"\n--- Tema {track['number']}: {track['title']} ---")
         try:
+            track_reference = track_references.get(track["number"], reference_path)
+            if track_reference:
+                print(f"   Referencia de mastering: {track_reference}")
             prepared_audio = _prepare_audio(
-                str(audio_path), reference_path,
+                str(audio_path), track_reference,
                 title=track["title"], artist=artist, album=lp_title, genre=genre,
                 track_number=track["number"], total_tracks=len(pairs),
                 final_dir=str(audio_final_dir),
