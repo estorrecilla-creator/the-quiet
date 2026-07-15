@@ -33,6 +33,9 @@ resumir nada:
   pensada para generar imágenes/vídeo/metadatos de ese tema: mezcla el
   concepto/atmósfera general del LP con lo específico de ese tema si el
   documento lo detalla (tema narrativo, estado de ánimo, imágenes recurrentes).
+- El "concept" es una descripción breve (2-4 frases) en español del concepto/
+  narrativa/atmósfera general del ÁLBUM ENTERO (no de un tema en concreto),
+  pensada para la descripción de la lista de reproducción del álbum.
 - Si un tema es instrumental (no tiene letra), "lyrics" debe ser null.
 - Los temas van en el "number" que les corresponda según el documento (su
   posición/orden en el tracklist o álbum, empezando en 1).
@@ -43,6 +46,7 @@ markdown, con esta forma exacta:
   "artist": "nombre del artista/grupo",
   "lp_title": "nombre del LP/álbum",
   "genre": "género/estilo general en 1-2 frases",
+  "concept": "concepto/narrativa/atmósfera general del álbum en 2-4 frases",
   "tracks": [
     {"number": 1, "title": "...", "lyrics": "..." o null, "context": "..."},
     ...

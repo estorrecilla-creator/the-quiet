@@ -67,3 +67,19 @@ def add_video_to_playlist(youtube, playlist_id, video_id, position=None):
 
 def playlist_url(playlist_id: str) -> str:
     return f"https://www.youtube.com/playlist?list={playlist_id}"
+
+
+def update_playlist_description(youtube, playlist_id: str, description: str):
+    """
+    Cambia la descripción de una lista de reproducción ya creada, sin
+    tocar el resto de su snippet (título, idioma...). YouTube exige
+    mandar el snippet completo en cada actualización, así que primero se
+    lee el actual y solo se sustituye la descripción.
+    """
+    current = youtube.playlists().list(part="snippet", id=playlist_id).execute()
+    items = current.get("items", [])
+    if not items:
+        return
+    snippet = items[0]["snippet"]
+    snippet["description"] = description
+    youtube.playlists().update(part="snippet", body={"id": playlist_id, "snippet": snippet}).execute()

@@ -360,7 +360,10 @@ def _collect_track_outputs(tracks, videos_dir, shorts_dir_root):
     return result
 
 
-def _run_youtube_phase(tracks, videos_dir, shorts_dir_root, lp_calendar, thumbnails, lp_dir):
+def _run_youtube_phase(
+    tracks, videos_dir, shorts_dir_root, lp_calendar, thumbnails, lp_dir,
+    artist, lp_title, genre, concept,
+):
     from src.lp_shorts_schedule import build_lp_schedule, save_lp_schedule, upload_lp_schedule
 
     track_outputs = _collect_track_outputs(tracks, videos_dir, shorts_dir_root)
@@ -409,12 +412,27 @@ def _run_youtube_phase(tracks, videos_dir, shorts_dir_root, lp_calendar, thumbna
         from src.youtube_uploader import get_authenticated_service
         from src.youtube_playlists import create_or_get_playlist, playlist_url
         from src.youtube_sections import add_playlist_to_section
+        from src.metadata_generator import generate_playlist_metadata
+        from src.discografia import register_and_link_lp_playlist
         youtube = get_authenticated_service()
         playlist_id = create_or_get_playlist(youtube, playlist_name)
         print(f"-> Lista de reproducción: {playlist_url(playlist_id)}")
         link_block += f"\n\n▶ Escucha todo el álbum: {playlist_url(playlist_id)}"
         add_playlist_to_section(youtube, playlist_id, section_title="Álbumes")
         print('-> Añadida a la sección "Álbumes" de la página de inicio del canal.')
+
+        print("-> Generando descripción optimizada de la lista de reproducción (hashtags incluidos)...")
+        playlist_meta = generate_playlist_metadata(artist, lp_title, genre, concept)
+        register_and_link_lp_playlist(
+            youtube, lp_dir.parent, artist, lp_title, playlist_id,
+            base_description=playlist_meta.get("description", ""),
+            hashtags=playlist_meta.get("hashtags", []),
+        )
+        print(
+            "-> Descripción actualizada, con enlaces cruzados a los demás "
+            "álbumes del grupo (y los demás álbumes ya suben también su "
+            "enlace a este)."
+        )
     if extra_links:
         link_block += f"\n\n{extra_links}"
 
@@ -488,6 +506,7 @@ def main():
     artist = st.ask("Artista", dossier.get("artist") or grupo)
     lp_title = st.ask("Nombre del LP", dossier.get("lp_title") or lp_name)
     genre = st.ask("Género/estilo", dossier.get("genre"))
+    concept = dossier.get("concept", "")
     memory.update({"artist": artist, "genre": genre})
 
     do_master = st.ask("¿Masterizar todos los temas contra una misma canción de referencia? [s/N]", "n").lower()
@@ -609,7 +628,10 @@ def main():
         print("Listo por ahora. Puedes programar YouTube más tarde relanzando esta fase.")
         return
 
-    _run_youtube_phase(tracks, videos_dir, shorts_dir_root, lp_calendar, thumbnails, lp_dir)
+    _run_youtube_phase(
+        tracks, videos_dir, shorts_dir_root, lp_calendar, thumbnails, lp_dir,
+        artist, lp_title, genre, concept,
+    )
 
 
 if __name__ == "__main__":

@@ -76,6 +76,44 @@ def generate_metadata(artist, track_title, genre, context, content_type="main"):
     return json.loads(raw_text)
 
 
+PLAYLIST_USER_TEMPLATE = """Genera la descripción de una lista de reproducción de
+YouTube que reúne TODOS los temas de un álbum, en orden.
+
+Artista: {artist}
+Álbum: {lp_title}
+Género/estilo: {genre}
+Concepto/narrativa del álbum: {concept}
+
+Devuelve un JSON con esta forma exacta:
+{{
+  "description": "string, 3-6 líneas: qué es el álbum, su concepto/atmósfera, y una llamada a la acción para escucharlo entero de principio a fin",
+  "hashtags": ["#etiqueta1", "#etiqueta2", "... 8-12 hashtags relevantes, mezcla de nicho y genéricos"]
+}}
+"""
+
+
+def generate_playlist_metadata(artist, lp_title, genre, concept):
+    client = anthropic.Anthropic()
+
+    user_prompt = PLAYLIST_USER_TEMPLATE.format(
+        artist=artist, lp_title=lp_title, genre=genre, concept=concept or "",
+    )
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=800,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+
+    raw_text = "".join(
+        block.text for block in response.content if block.type == "text"
+    )
+    raw_text = raw_text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+
+    return json.loads(raw_text)
+
+
 if __name__ == "__main__":
     import sys
 

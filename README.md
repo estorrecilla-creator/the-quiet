@@ -498,7 +498,13 @@ Al confirmar la subida, también te pregunta:
   duplica) y añade ahí el vídeo principal, en la posición correcta si el
   título del tema empieza por un número (ej. "10 Static Between Hands
   (Reprise)" → posición 10). El enlace a esa lista se añade automáticamente
-  a la descripción de todos los vídeos y Shorts de ese tema.
+  a la descripción de todos los vídeos y Shorts de ese tema. La propia
+  lista de reproducción también lleva su descripción generada con IA
+  (concepto del álbum + 8-12 hashtags), y si el grupo ya tiene otros LPs
+  subidos, se enlazan entre sí solos ("Más álbumes de..."): cada LP nuevo
+  actualiza también la descripción de los LPs anteriores del mismo grupo
+  para que apunten al más reciente, sin tener que tocarlos a mano
+  (`src/discografia.py`, guardado en `MUSICA/<Grupo>/discografia.json`).
 - **Enlaces extra** (redes, web...): lo que pegues se añade tal cual al
   final de la descripción de todos los vídeos/Shorts de esa tanda.
 

@@ -64,7 +64,18 @@ todo en carpetas listas para revisión manual antes de subir.
   "carpetas"), creándola la primera vez y ampliándola en los siguientes
   LPs sin duplicar ni pisar nada. `tools/configurar_canal_youtube.py`
   puede además crear las secciones automáticas "Últimos vídeos"/"Más
-  populares" (una sola vez, opcional).
+  populares" (una sola vez, opcional). La descripción de la lista de
+  reproducción de cada LP también se genera con IA
+  (`metadata_generator.generate_playlist_metadata`: concepto del álbum +
+  8-12 hashtags) y se enlaza sola con las de otros LPs del mismo grupo
+  ("Más álbumes de...", `src/discografia.py`, persistido en
+  `MUSICA/<Grupo>/discografia.json`) — al subir un LP nuevo, se
+  actualizan también las descripciones de los LPs anteriores del mismo
+  grupo para que apunten al más reciente, reconstruyendo el bloque de
+  enlaces entero cada vez (nunca concatenando) para no duplicar texto en
+  relanzamientos. `src/lp_dossier.py` ahora también extrae "concept" (el
+  concepto/narrativa del álbum entero, no de un tema) para alimentar
+  esto.
 - `setup.sh` — instalación de un solo comando (venv + deps + crea `.env`).
 - `webapp.py` + `templates/` — interfaz web (Flask) para generar contenido
   desde el navegador (incluido Safari en iPhone) sin terminal: formulario de
