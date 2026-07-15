@@ -155,11 +155,14 @@ def process_track(
                 f"-> Generando {total_shorts} Shorts ({shorts_per_clip} por "
                 f"cada uno de los {len(shorts_clips)} clips de vídeo)..."
             )
-            moments = find_many_moments(audio_path, total_shorts, clip_duration=15.0)
+            # 20-35s es el rango con mejor tasa de finalización en Shorts (lo
+            # que más pesa para el algoritmo, más que las visitas en bruto);
+            # 22s se queda cómodo dentro de ese rango sin arrastrarse.
+            moments = find_many_moments(audio_path, total_shorts, clip_duration=22.0)
             short_i = 0
             for clip in shorts_clips:
                 for _ in range(shorts_per_clip):
-                    moment = moments[short_i % len(moments)] if moments else {"start": 0.0, "end": 15.0}
+                    moment = moments[short_i % len(moments)] if moments else {"start": 0.0, "end": 22.0}
                     moment_duration = moment["end"] - moment["start"]
                     video_offset = find_best_video_moment(clip, moment_duration)
                     short_i += 1
@@ -178,6 +181,7 @@ def process_track(
                         watermark_logo_light_path=watermark_logo_light_path,
                         watermark_logo_dark_path=watermark_logo_dark_path,
                         cover_offset=video_offset,
+                        hook_text=None if lyrics_srt else title,
                     )
 
                     short_meta = generate_metadata(artist, title, genre, context, content_type="short")
@@ -198,6 +202,7 @@ def process_track(
                     track_title=title,
                     watermark_logo_light_path=watermark_logo_light_path,
                     watermark_logo_dark_path=watermark_logo_dark_path,
+                    hook_text=None if lyrics_srt else title,
                 )
 
                 short_meta = generate_metadata(artist, title, genre, context, content_type="short")

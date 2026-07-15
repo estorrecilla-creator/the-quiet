@@ -36,12 +36,41 @@ Tipo de contenido: {content_type_label}
 
 Devuelve un JSON con esta forma exacta:
 {{
-  "title": "string, máx 100 caracteres, con hook si es short",
-  "description": "string, 3-5 líneas, incluye contexto artístico + llamada a la acción",
+  "title": "string, máx 100 caracteres. {title_hint}",
+  "description": "string. {description_hint}",
   "hashtags": ["#etiqueta1", "#etiqueta2", "#etiqueta3", "3-5 hashtags MÁXIMO y muy relevantes — pasarse de 5 hace que YouTube lo clasifique como spam"],
   "tags_youtube": ["palabra clave 1", "palabra clave 2", "... 10-15 tags para el campo de YouTube (no hashtags, keywords sueltas)"]
 }}
 """
+
+# El vídeo largo se beneficia de una descripción extensa (SEO: cuanto más
+# contexto real, mejor entiende YouTube de qué trata) con la palabra clave
+# principal (título/artista) en la primera frase. El Short se lee poco y
+# se ve mayoritariamente en el feed de deslizar, así que se queda corto y
+# directo — pero desde enero de 2026 los Shorts tienen su propio filtro de
+# búsqueda en YouTube, así que el título debe incluir una frase de
+# búsqueda real, no solo un gancho.
+_HINTS = {
+    "main": {
+        "title": "La palabra clave principal (título del tema o artista) cerca del principio.",
+        "description": (
+            "300-500 palabras. La palabra clave principal (título del tema/artista) en la "
+            "PRIMERA frase. Desarrolla el concepto/contexto artístico en profundidad — ayuda a "
+            "que YouTube entienda de qué trata, no repitas la misma frase varias veces — y "
+            "termina con una llamada a la acción clara."
+        ),
+    },
+    "short": {
+        "title": (
+            "Incluye tanto un gancho como una frase de búsqueda real (YouTube tiene un filtro de "
+            "búsqueda propio para Shorts desde 2026, no basta con un gancho genérico)."
+        ),
+        "description": (
+            "3-5 líneas. La palabra clave principal (título del tema) en la PRIMERA frase, "
+            "contexto artístico breve y una llamada a la acción."
+        ),
+    },
+}
 
 
 def generate_metadata(artist, track_title, genre, context, content_type="main"):
@@ -52,6 +81,7 @@ def generate_metadata(artist, track_title, genre, context, content_type="main"):
         if content_type == "main"
         else "YouTube Short (15-60s, fragmento del tema)"
     )
+    hints = _HINTS["main"] if content_type == "main" else _HINTS["short"]
 
     user_prompt = USER_TEMPLATE.format(
         artist=artist,
@@ -59,11 +89,13 @@ def generate_metadata(artist, track_title, genre, context, content_type="main"):
         genre=genre,
         context=context,
         content_type_label=content_type_label,
+        title_hint=hints["title"],
+        description_hint=hints["description"],
     )
 
     response = client.messages.create(
         model=MODEL,
-        max_tokens=1000,
+        max_tokens=1800 if content_type == "main" else 1000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}],
     )

@@ -18,7 +18,12 @@ todo en carpetas listas para revisión manual antes de subir.
   usaba un model id inválido (`claude-sonnet-4-6`) que habría fallado incluso
   con API key correcta. Lógica de parseo del JSON verificada con mock; falta
   confirmación en vivo con una ANTHROPIC_API_KEY real (no disponible en el
-  entorno de desarrollo/sandbox).
+  entorno de desarrollo/sandbox). Ajustado a las prácticas de SEO de
+  YouTube en 2026 (investigado, ver `_HINTS`): 3-5 hashtags máximo (más de
+  5 se clasifica como spam, antes pedíamos 8-12), descripción del vídeo
+  principal 300-500 palabras con la palabra clave en la primera frase
+  (antes 3-5 líneas), título de Shorts con frase de búsqueda real además
+  de gancho (filtro de búsqueda propio de Shorts desde enero 2026).
 - `src/youtube_uploader.py` — sube en modo PRIVADO vía OAuth. NO PROBADO
   (necesita client_secret.json de Google Cloud Console, no se puede generar
   automáticamente). Salva decidió: de momento NO integrar en el pipeline
@@ -39,9 +44,13 @@ todo en carpetas listas para revisión manual antes de subir.
   `MINIATURAS/` (`src/thumbnail_template.py`, reutilizada para vídeo+Shorts),
   busca 15 clips de vídeo libre de derechos sin repetir ninguno en todo el
   LP (`exclude_urls` compartido a través de `src/stock_video.py`) y genera 3
-  Shorts por clip (45/tema) con su propio mejor momento de audio
-  (`src/audio_analysis.find_many_moments`) y de vídeo
-  (`src/video_analysis.find_best_video_moment`), guardando vídeos en
+  Shorts por clip (45/tema) de 22s (rango 20-35s: mejor tasa de
+  finalización, lo que más pesa en el algoritmo de Shorts en 2026) con su
+  propio mejor momento de audio (`src/audio_analysis.find_many_moments`) y
+  de vídeo (`src/video_analysis.find_best_video_moment`). Si el tema no
+  tiene letra, el Short lleva un texto "gancho" (el título) los primeros
+  3.5s (`hook_text` en `shorts_generator.generate_short` — el 85% de los
+  Shorts se ven sin sonido al principio). Guarda vídeos en
   `VIDEOS/` y Shorts en `SHORTS/`. Al final puede encadenar la programación
   completa a YouTube (`src/lp_shorts_schedule.py`): 2 Shorts/día (12:00 tema
   ya publicado, 21:00 avance del siguiente — antes de streaming, a

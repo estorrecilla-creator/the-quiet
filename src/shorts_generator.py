@@ -27,6 +27,31 @@ def _is_video_file(path: str) -> bool:
     return Path(path).suffix.lower() in VIDEO_EXTENSIONS
 
 
+def _format_srt_time(t: float) -> str:
+    t = max(t, 0.0)
+    h = int(t // 3600)
+    m = int((t % 3600) // 60)
+    s = int(t % 60)
+    ms = int(round((t - int(t)) * 1000))
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def _build_hook_srt(text: str, duration: float) -> str:
+    """
+    .srt de una sola línea (el texto "gancho", ej. el título del tema)
+    mostrada desde el segundo 0 — para los Shorts sin letra real
+    (instrumentales): el 85% de los Shorts se ven sin sonido al
+    principio, así que conviene que se lea algo desde el primer momento
+    aunque no haya letra que sincronizar.
+    """
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".srt", prefix="hook_", delete=False, encoding="utf-8",
+    )
+    tmp.write(f"1\n00:00:00,000 --> {_format_srt_time(duration)}\n{text}\n\n")
+    tmp.close()
+    return tmp.name
+
+
 def _extract_reference_frame(video_path: str, t: float = 0.0) -> str:
     out_path = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False).name
     subprocess.run(
@@ -53,7 +78,17 @@ def generate_short(
     watermark_logo_dark_path: str = None,
     watermark_opacity: float = 0.65,
     cover_offset: float = 0.0,
+    hook_text: str = None,
+    hook_duration: float = 3.5,
 ):
+    """
+    `hook_text`: si no hay `lyrics_path` (Short instrumental, sin letra
+    que sincronizar), muestra este texto (normalmente el título del
+    tema) desde el segundo 0 durante `hook_duration` segundos — el 85%
+    de los Shorts se ven sin sonido al principio, así que conviene que
+    se lea algo desde ya aunque no haya letra. Se ignora si `lyrics_path`
+    sí está presente (la letra real tiene prioridad).
+    """
     duration = end - start
     w, h = 1080, 1920
     wave_h = int(h * 0.09)
@@ -66,6 +101,7 @@ def generate_short(
     )
     ass_path = None
     wm_sticker_path = None
+    hook_srt_path = None
     person_cutout = extract_person_cutout(reference_image)
     try:
         star_path_arg = escape_path(star_script)
@@ -114,6 +150,14 @@ def generate_short(
             )
             filter_complex += f";[{final_label}]{subtitles_filter_fragment(ass_path)}[outv1]"
             final_label = "outv1"
+        elif hook_text:
+            margin_v = wave_h + 12
+            hook_srt_path = _build_hook_srt(hook_text, min(hook_duration, duration))
+            # offset=0 (no `start`): el gancho está escrito ya en el tiempo
+            # propio del Short (desde el segundo 0), no del tema completo.
+            ass_path = srt_to_ass(hook_srt_path, w, h, margin_v, offset=0.0, duration=duration, karaoke=False)
+            filter_complex += f";[{final_label}]{subtitles_filter_fragment(ass_path)}[outv1]"
+            final_label = "outv1"
 
         cmd = ["ffmpeg", "-y", "-i", audio_path]
         if is_video:
@@ -157,6 +201,8 @@ def generate_short(
         os.remove(star_script)
         if ass_path:
             os.remove(ass_path)
+        if hook_srt_path:
+            os.remove(hook_srt_path)
         if person_cutout:
             os.remove(person_cutout)
         if is_video:

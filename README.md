@@ -160,10 +160,14 @@ arrastrar nada. Genera el vídeo principal + Shorts + metadatos + audio
 final listo para DistroKid de todos los temas, con absolutamente todo lo
 que tiene el pipeline (masterización, normalización de volumen, 15 clips
 de vídeo libre de derechos por tema sin repetirse en todo el LP + 3 Shorts
-por clip con su propio mejor momento de audio y de vídeo, letra karaoke,
-marca de agua, acabado cinematográfico, miniatura por tema...). Al final,
-si quieres, también encadena la programación/subida a YouTube de todo el
-LP de golpe.
+de 22s por clip (el rango 20-35s es el que mejor tasa de finalización
+tiene en 2026, lo que más pesa para el algoritmo de Shorts) con su propio
+mejor momento de audio y de vídeo, letra karaoke —o, si el tema es
+instrumental, un texto "gancho" con el título los primeros segundos, ya
+que la mayoría de los Shorts se ven sin sonido al principio—, marca de
+agua, acabado cinematográfico, miniatura por tema...). Al final, si
+quieres, también encadena la programación/subida a YouTube de todo el LP
+de golpe.
 
 ### Antes de arrancarlo
 
