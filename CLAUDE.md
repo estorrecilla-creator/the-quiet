@@ -58,6 +58,13 @@ todo en carpetas listas para revisión manual antes de subir.
   pensada para la Tarea Programada de Windows (`continuar_subida_youtube.bat`,
   sin `pause` porque se ejecuta desatendida) — así el LP se termina de
   subir solo, un lote al día, sin que Salva tenga que relanzar nada a mano.
+  Cada LP procesado también se añade solo a la sección "Álbumes" de la
+  página de inicio del canal (`src/youtube_sections.py`, recurso
+  `channelSections` de la API — lo más parecido que tiene YouTube a
+  "carpetas"), creándola la primera vez y ampliándola en los siguientes
+  LPs sin duplicar ni pisar nada. `tools/configurar_canal_youtube.py`
+  puede además crear las secciones automáticas "Últimos vídeos"/"Más
+  populares" (una sola vez, opcional).
 - `setup.sh` — instalación de un solo comando (venv + deps + crea `.env`).
 - `webapp.py` + `templates/` — interfaz web (Flask) para generar contenido
   desde el navegador (incluido Safari en iPhone) sin terminal: formulario de

@@ -502,14 +502,22 @@ Al confirmar la subida, también te pregunta:
 - **Enlaces extra** (redes, web...): lo que pegues se añade tal cual al
   final de la descripción de todos los vídeos/Shorts de esa tanda.
 
-### Ajustar el canal (palabras clave, "Acerca de")
+### Ajustar el canal (palabras clave, "Acerca de", secciones)
 
 `configurar_canal_youtube.py` — asistente aparte para las palabras clave y
 la descripción del canal (ayuda a que YouTube lo recomiende al nicho
-correcto). Se ejecuta una vez, o cuando quieras cambiarlas:
+correcto), y para organizar la página de inicio en secciones — lo más
+parecido que tiene YouTube a "carpetas". Se ejecuta una vez, o cuando
+quieras cambiar algo:
 ```bash
 python tools/configurar_canal_youtube.py
 ```
+
+Si aceptas las secciones, crea "Últimos vídeos" y "Más populares" (las
+rellena YouTube solo). La sección "Álbumes" no hace falta crearla aquí:
+se crea sola la primera vez que subes un LP con `procesar_lp.py`, y a
+partir de ahí cada LP nuevo se añade solo a esa misma sección — no hace
+falta relanzar nada ni acordarte de tocar el canal a mano.
 
 ### Marca de agua: nombre del grupo/tema y logo, discretos
 

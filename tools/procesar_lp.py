@@ -408,10 +408,13 @@ def _run_youtube_phase(tracks, videos_dir, shorts_dir_root, lp_calendar, thumbna
     if playlist_name:
         from src.youtube_uploader import get_authenticated_service
         from src.youtube_playlists import create_or_get_playlist, playlist_url
+        from src.youtube_sections import add_playlist_to_section
         youtube = get_authenticated_service()
         playlist_id = create_or_get_playlist(youtube, playlist_name)
         print(f"-> Lista de reproducción: {playlist_url(playlist_id)}")
         link_block += f"\n\n▶ Escucha todo el álbum: {playlist_url(playlist_id)}"
+        add_playlist_to_section(youtube, playlist_id, section_title="Álbumes")
+        print('-> Añadida a la sección "Álbumes" de la página de inicio del canal.')
     if extra_links:
         link_block += f"\n\n{extra_links}"
 

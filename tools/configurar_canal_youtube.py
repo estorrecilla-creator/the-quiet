@@ -46,14 +46,34 @@ def main():
         "Descripción del canal (el 'Acerca de'; Enter para no tocarla)",
         required=False,
     )
+    secciones_raw = input(
+        "\n¿Organizar también la página de inicio del canal en secciones "
+        "(\"Últimos vídeos\", \"Más populares\"...; \"Álbumes\" se crea sola "
+        "la primera vez que subas un LP)? [s/N]: "
+    ).strip().lower()
+    quiere_secciones = secciones_raw.startswith("s")
 
-    if not keywords and not description:
+    if not keywords and not description and not quiere_secciones:
         print("No has indicado nada que cambiar.")
         return
 
     youtube = get_authenticated_service()
-    update_channel_branding(youtube, keywords=keywords, description=description)
-    print("\nListo. Ajustes del canal actualizados.")
+
+    if keywords or description:
+        update_channel_branding(youtube, keywords=keywords, description=description)
+        print("Ajustes de marca del canal actualizados.")
+
+    if quiere_secciones:
+        from src.youtube_sections import ensure_builtin_section
+        ensure_builtin_section(youtube, "recentUploads", position=0)
+        ensure_builtin_section(youtube, "popularUploads", position=1)
+        print(
+            'Secciones "Últimos vídeos" y "Más populares" creadas (si no '
+            'existían ya). La sección "Álbumes" se crea sola, con la lista '
+            "de cada LP, la primera vez que subas uno con procesar_lp.py."
+        )
+
+    print("\nListo.")
 
 
 if __name__ == "__main__":
