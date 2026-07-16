@@ -61,6 +61,33 @@ OUTPUT_SUBFOLDERS = {"AUDIO_FINAL", "VIDEOS", "SHORTS", "MINIATURAS"}
 N_CLIPS_PER_TRACK = 15  # Pendiente #4: fijo, no variable con la duración
 SHORTS_PER_CLIP = 3     # Pendiente #6: 3 Shorts por cada uno de los 15 clips (45/tema)
 FALLBACK_N_SHORTS = 3   # solo si no hay ningún clip de vídeo (portada de imagen fija)
+PROGRESS_FILENAME = "progreso_generacion.json"
+
+
+def _load_generation_progress(lp_dir):
+    """
+    Qué temas ya se generaron del todo (audio+vídeo+Shorts) y qué clips
+    de vídeo se usaron ya, de una ejecución anterior — para que si el
+    proceso se corta a mitad (el PC se apaga/suspende, un corte de luz...)
+    relanzarlo no vuelva a generar desde cero los temas que ya estaban
+    listos, ni repita un clip de vídeo ya usado en uno de ellos.
+    """
+    path = Path(lp_dir) / PROGRESS_FILENAME
+    if path.exists():
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return set(data.get("completed_tracks", [])), set(data.get("used_video_urls", []))
+    return set(), set()
+
+
+def _save_generation_progress(lp_dir, completed_tracks, used_video_urls):
+    path = Path(lp_dir) / PROGRESS_FILENAME
+    path.write_text(
+        json.dumps(
+            {"completed_tracks": sorted(completed_tracks), "used_video_urls": sorted(used_video_urls)},
+            ensure_ascii=False, indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 # --------------------------------------------------------------------
@@ -649,12 +676,29 @@ def main():
 
     print(f"\n=== Empezando: {len(pairs)} temas de \"{lp_title}\" ===\n")
 
-    used_video_urls = set()
+    completed_tracks, used_video_urls = _load_generation_progress(lp_dir)
+    if completed_tracks:
+        print(
+            f"-> Retomando una ejecución anterior: {len(completed_tracks)}/{len(pairs)} "
+            "temas ya generados, los salto (nada se ha perdido). Si quieres "
+            f"generarlos de nuevo desde cero, borra {lp_dir / PROGRESS_FILENAME}."
+        )
+
     thumbnails = {}
     out_dirs = []
     fallos = []
     for audio_path, track in pairs:
         track_title = _track_display_title(track)
+
+        if track["number"] in completed_tracks:
+            print(f"\n--- Tema {track['number']}: {track['title']} --- (ya generado, lo salto)")
+            out_dirs.append(str(videos_dir / track_title.replace(" ", "_")))
+            if thumb_template:
+                thumb_out = miniaturas_dir / f"{_safe_filename(track['title']).replace(' ', '_')}.jpg"
+                if thumb_out.exists():
+                    thumbnails[track["number"]] = str(thumb_out)
+            continue
+
         print(f"\n--- Tema {track['number']}: {track['title']} ---")
         try:
             track_reference = track_references.get(track["number"], reference_path)
@@ -702,6 +746,8 @@ def main():
                 if lyrics_path:
                     os.remove(lyrics_path)
             out_dirs.append(str(out_dir))
+            completed_tracks.add(track["number"])
+            _save_generation_progress(lp_dir, completed_tracks, used_video_urls)
         except Exception as e:
             print(f"  ERROR en el tema {track['number']} ({track['title']}): {e}")
             print("  Sigo con el siguiente tema.")
