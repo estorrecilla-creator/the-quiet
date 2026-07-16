@@ -14,9 +14,9 @@ Uso:
     )
 """
 
-import os
 import json
-import anthropic
+
+from src.anthropic_utils import call_claude_json
 
 MODEL = "claude-sonnet-5"
 
@@ -74,8 +74,6 @@ _HINTS = {
 
 
 def generate_metadata(artist, track_title, genre, context, content_type="main"):
-    client = anthropic.Anthropic()  # usa ANTHROPIC_API_KEY del entorno
-
     content_type_label = (
         "Vídeo largo de YouTube (tema completo o LP)"
         if content_type == "main"
@@ -93,19 +91,11 @@ def generate_metadata(artist, track_title, genre, context, content_type="main"):
         description_hint=hints["description"],
     )
 
-    response = client.messages.create(
-        model=MODEL,
+    return call_claude_json(
+        SYSTEM_PROMPT, user_prompt,
         max_tokens=1800 if content_type == "main" else 1000,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}],
+        model=MODEL,
     )
-
-    raw_text = "".join(
-        block.text for block in response.content if block.type == "text"
-    )
-    raw_text = raw_text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-
-    return json.loads(raw_text)
 
 
 PLAYLIST_USER_TEMPLATE = """Genera la descripción de una lista de reproducción de
@@ -125,25 +115,10 @@ Devuelve un JSON con esta forma exacta:
 
 
 def generate_playlist_metadata(artist, lp_title, genre, concept):
-    client = anthropic.Anthropic()
-
     user_prompt = PLAYLIST_USER_TEMPLATE.format(
         artist=artist, lp_title=lp_title, genre=genre, concept=concept or "",
     )
-
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=800,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
-
-    raw_text = "".join(
-        block.text for block in response.content if block.type == "text"
-    )
-    raw_text = raw_text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-
-    return json.loads(raw_text)
+    return call_claude_json(SYSTEM_PROMPT, user_prompt, max_tokens=800, model=MODEL)
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ escribirlo como te salga natural (es lo mismo que se hizo a mano para
 
 import json
 
-import anthropic
+from src.anthropic_utils import call_claude_json
 
 MODEL = "claude-sonnet-5"
 
@@ -61,21 +61,8 @@ Extrae el JSON estructurado según las instrucciones."""
 
 
 def parse_lp_dossier(dossier_text: str) -> dict:
-    client = anthropic.Anthropic()
-
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=16000,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": USER_TEMPLATE.format(dossier_text=dossier_text)}],
-    )
-
-    raw_text = "".join(
-        block.text for block in response.content if block.type == "text"
-    )
-    raw_text = raw_text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-
-    result = json.loads(raw_text)
+    user_prompt = USER_TEMPLATE.format(dossier_text=dossier_text)
+    result = call_claude_json(SYSTEM_PROMPT, user_prompt, max_tokens=16000, model=MODEL)
 
     if not result.get("tracks"):
         raise ValueError("No se ha podido extraer ningún tema del documento del LP.")

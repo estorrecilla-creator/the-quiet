@@ -8,7 +8,7 @@ y descargan las imágenes.
 
 import json
 
-import anthropic
+from src.anthropic_utils import call_claude_json
 
 MODEL = "claude-sonnet-5"
 
@@ -44,26 +44,11 @@ Devuelve un JSON con esta forma exacta:
 
 
 def generate_image_prompts(artist, track_title, genre, context, n_images=3):
-    client = anthropic.Anthropic()  # usa ANTHROPIC_API_KEY del entorno
-
     user_prompt = USER_TEMPLATE.format(
         n_images=n_images, artist=artist, track_title=track_title,
         genre=genre, context=context,
     )
-
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=1000,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
-
-    raw_text = "".join(
-        block.text for block in response.content if block.type == "text"
-    )
-    raw_text = raw_text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-
-    result = json.loads(raw_text)
+    result = call_claude_json(SYSTEM_PROMPT, user_prompt, max_tokens=1000, model=MODEL)
     return result["prompts"]
 
 
@@ -122,26 +107,11 @@ def generate_stock_queries(artist, track_title, genre, context, n_queries=3):
     términos cortos y concretos (algo que de verdad exista como metraje
     filmado), no prompts elaborados de generación de imagen.
     """
-    client = anthropic.Anthropic()
-
     user_prompt = STOCK_USER_TEMPLATE.format(
         n_queries=n_queries, artist=artist, track_title=track_title,
         genre=genre, context=context,
     )
-
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=500,
-        system=STOCK_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
-
-    raw_text = "".join(
-        block.text for block in response.content if block.type == "text"
-    )
-    raw_text = raw_text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-
-    result = json.loads(raw_text)
+    result = call_claude_json(STOCK_SYSTEM_PROMPT, user_prompt, max_tokens=500, model=MODEL)
     return result["queries"]
 
 
