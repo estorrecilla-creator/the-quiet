@@ -277,6 +277,21 @@ def _match_track(raw, tracks):
 # Pendiente #2: calendario de lanzamiento inline (singles + álbum completo)
 # --------------------------------------------------------------------
 
+def _ask_date(prompt):
+    """
+    Como st.ask, pero para una fecha dd/mm/aaaa: si no se puede parsear
+    (un typo, un formato distinto...), no revienta todo el programa con
+    un traceback — avisa y vuelve a preguntar, igual que ask_path hace
+    con una ruta que no existe.
+    """
+    while True:
+        raw = st.ask(prompt)
+        try:
+            return datetime.strptime(raw, "%d/%m/%Y").date()
+        except ValueError:
+            print(f"  \"{raw}\" no es una fecha válida en formato dd/mm/aaaa (ej. 20/07/2026). Prueba otra vez.")
+
+
 def _ask_release_calendar(tracks, lp_dir):
     from src.lp_release_calendar import build_lp_calendar_custom, save_lp_calendar, next_friday
 
@@ -300,8 +315,7 @@ def _ask_release_calendar(tracks, lp_dir):
                 break
             print("  No lo encuentro entre los temas del LP (o ya lo has usado). Prueba otra vez.")
 
-    first_release_raw = st.ask("Fecha del primer single (dd/mm/aaaa)")
-    first_release_date = datetime.strptime(first_release_raw, "%d/%m/%Y").date()
+    first_release_date = _ask_date("Fecha del primer single (dd/mm/aaaa)")
     cadence = int(st.ask(
         "Días entre cada single (y entre el último single y el álbum completo)", "14"
     ))

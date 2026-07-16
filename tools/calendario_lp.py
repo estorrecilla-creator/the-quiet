@@ -37,6 +37,15 @@ def ask(prompt, default=None, required=True):
         print("  Este dato es obligatorio.")
 
 
+def ask_date(prompt):
+    while True:
+        raw = ask(prompt)
+        try:
+            return datetime.strptime(raw, "%d/%m/%Y").date()
+        except ValueError:
+            print(f"  \"{raw}\" no es una fecha válida en formato dd/mm/aaaa (ej. 20/07/2026). Prueba otra vez.")
+
+
 def main():
     print("=== Calendario de lanzamiento del LP ===\n")
 
@@ -53,8 +62,7 @@ def main():
         print("No se ha indicado ningún tema.")
         return
 
-    fecha_raw = ask("Fecha del primer lanzamiento (dd/mm/aaaa)")
-    fecha = datetime.strptime(fecha_raw, "%d/%m/%Y").date()
+    fecha = ask_date("Fecha del primer lanzamiento (dd/mm/aaaa)")
     ajustada = next_friday(fecha)
     if ajustada != fecha:
         print(f"  (Ajustada al viernes siguiente: {ajustada.strftime('%d/%m/%Y')} — mejor para listas editoriales)")

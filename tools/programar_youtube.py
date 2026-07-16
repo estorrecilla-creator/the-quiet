@@ -50,6 +50,15 @@ def ask_path(prompt, required=True):
         print(f"  No encuentro el archivo: {value}")
 
 
+def ask_date(prompt):
+    while True:
+        raw = ask(prompt)
+        try:
+            return datetime.strptime(raw, "%d/%m/%Y").date()
+        except ValueError:
+            print(f"  \"{raw}\" no es una fecha válida en formato dd/mm/aaaa (ej. 20/07/2026). Prueba otra vez.")
+
+
 def main():
     print("=== Programar publicación en YouTube ===\n")
 
@@ -72,8 +81,7 @@ def main():
         schedule = None
 
     if schedule is None:
-        fecha_raw = ask("Fecha del primer envío (dd/mm/aaaa)")
-        fecha = datetime.strptime(fecha_raw, "%d/%m/%Y").date()
+        fecha = ask_date("Fecha del primer envío (dd/mm/aaaa)")
         hora_raw = ask("Hora del primer envío, en hora de España (HH:MM)", "18:00")
         hh, mm = (int(x) for x in hora_raw.split(":"))
         interval = int(ask("Días entre cada publicación (vídeo principal, short 1, short 2...)", "3"))
