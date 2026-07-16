@@ -625,6 +625,13 @@ def main():
     artist = st.ask("Artista", dossier.get("artist") or grupo)
     lp_title = st.ask("Nombre del LP", dossier.get("lp_title") or lp_name)
     genre = st.ask("Género/estilo", dossier.get("genre"))
+    if genre and (len(genre.split()) > 4 or "," in genre):
+        print(
+            "  Aviso: ese género parece una descripción larga en vez de una "
+            "etiqueta corta — se escribe tal cual en los metadatos del audio "
+            "final. Mejor algo corto tipo \"Progressive Rock\" o \"Rock / "
+            "Progressive Rock\", sin nombres de otros artistas."
+        )
     concept = dossier.get("concept", "")
     memory.update({"artist": artist, "genre": genre})
 

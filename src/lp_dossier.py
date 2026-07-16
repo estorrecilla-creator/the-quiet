@@ -35,7 +35,18 @@ resumir nada:
   documento lo detalla (tema narrativo, estado de ánimo, imágenes recurrentes).
 - El "concept" es una descripción breve (2-4 frases) en español del concepto/
   narrativa/atmósfera general del ÁLBUM ENTERO (no de un tema en concreto),
-  pensada para la descripción de la lista de reproducción del álbum.
+  pensada para la descripción de la lista de reproducción del álbum. Aquí sí
+  puedes describir la atmósfera, las influencias o comparar con otros
+  artistas si el documento lo hace — este campo es solo para contexto
+  interno, nunca se escribe en el archivo de audio.
+- El "genre" es SOLO una etiqueta de género corta y normalizada — 1-3
+  palabras, en formato estándar de catálogo musical (ej. "Progressive
+  Rock", "Doom Folk", "Rock Alternativo"; si encajan dos, sepáralos con
+  " / " como "Rock / Progressive Rock"). NUNCA una frase descriptiva, NUNCA
+  nombres de otros artistas o bandas de referencia (aunque el documento
+  mencione influencias como "con aire a Pink Floyd" — eso va en "concept",
+  no en "genre"). Este campo se escribe tal cual en los metadatos del
+  archivo de audio final, así que tiene que quedar limpio y publicable.
 - Si un tema es instrumental (no tiene letra), "lyrics" debe ser null.
 - Los temas van en el "number" que les corresponda según el documento (su
   posición/orden en el tracklist o álbum, empezando en 1).
@@ -45,7 +56,7 @@ markdown, con esta forma exacta:
 {
   "artist": "nombre del artista/grupo",
   "lp_title": "nombre del LP/álbum",
-  "genre": "género/estilo general en 1-2 frases",
+  "genre": "etiqueta de género corta y normalizada, 1-3 palabras, sin nombres de otros artistas",
   "concept": "concepto/narrativa/atmósfera general del álbum en 2-4 frases",
   "tracks": [
     {"number": 1, "title": "...", "lyrics": "..." o null, "context": "..."},
