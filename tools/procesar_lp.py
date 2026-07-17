@@ -61,6 +61,13 @@ OUTPUT_SUBFOLDERS = {"AUDIO_FINAL", "VIDEOS", "SHORTS", "MINIATURAS"}
 N_CLIPS_PER_TRACK = 15  # Pendiente #4: fijo, no variable con la duración
 SHORTS_PER_CLIP = 3     # Pendiente #6: 3 Shorts por cada uno de los 15 clips (45/tema)
 FALLBACK_N_SHORTS = 3   # solo si no hay ningún clip de vídeo (portada de imagen fija)
+# Techo cuando se elige explícitamente miniatura fija para todos los Shorts
+# (en vez de clips de vídeo): find_best_moments exige >=45s entre momentos
+# elegidos para que sean genuinamente distintos, así que en una canción
+# normal esto rara vez llega al techo — y está bien así, mejor pocos
+# Shorts realmente distintos que muchos casi idénticos (peor para el
+# algoritmo de YouTube, puede leerse como contenido repetido/spam).
+SHORTS_STATIC_IMAGE_TOP_N = 8
 PROGRESS_FILENAME = "progreso_generacion.json"
 
 
@@ -677,6 +684,18 @@ def main():
     memory["thumb_template"] = thumb_template
     st._save_memory(memory)
 
+    shorts_visual_mode = "clips"
+    if thumb_template:
+        shorts_visual_mode = st.ask(
+            "¿Los Shorts deben usar clips de vídeo distintos por tema (hasta "
+            f"{N_CLIPS_PER_TRACK * SHORTS_PER_CLIP}, más variedad) o la "
+            "miniatura fija de portada para todos (menos llamadas a la API, "
+            f"pero como mucho {SHORTS_STATIC_IMAGE_TOP_N} Shorts realmente "
+            "distintos por tema — más no aporta nada, se repetirían)? "
+            "[clips/miniatura]",
+            "clips",
+        ).lower()
+
     have_openai = bool(os.environ.get("OPENAI_API_KEY"))
     have_stock = bool(
         os.environ.get("PEXELS_API_KEY") or os.environ.get("PIXABAY_API_KEY")
@@ -753,12 +772,25 @@ def main():
                 tmp.write(track["lyrics"])
                 tmp.close()
                 lyrics_path = tmp.name
+
+            use_static_shorts = shorts_visual_mode.startswith("m") and thumbnails.get(track["number"])
+            if use_static_shorts:
+                shorts_n = SHORTS_STATIC_IMAGE_TOP_N
+                shorts_clips_arg = None
+                shorts_cover_override_arg = thumbnails[track["number"]]
+                print(f"   Shorts con miniatura fija (hasta {shorts_n}, sin clips de vídeo).")
+            else:
+                shorts_n = FALLBACK_N_SHORTS
+                shorts_clips_arg = video_clips if video_clips else None
+                shorts_cover_override_arg = None
+
             try:
                 out_dir = process_track(
                     prepared_audio, cover, artist, track_title, genre, track["context"],
-                    FALLBACK_N_SHORTS, str(videos_dir), lyrics_path=lyrics_path,
+                    shorts_n, str(videos_dir), lyrics_path=lyrics_path,
                     shorts_out_dir=str(shorts_dir_root),
-                    shorts_clips=video_clips if video_clips else None,
+                    shorts_clips=shorts_clips_arg,
+                    shorts_cover_override=shorts_cover_override_arg,
                     shorts_per_clip=SHORTS_PER_CLIP,
                     watermark_logo_light_path=watermark_logo_light,
                     watermark_logo_dark_path=watermark_logo_dark,
