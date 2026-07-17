@@ -54,6 +54,7 @@ import subir_tema as st
 from main import process_track, resolve_cover, VIDEO_EXTENSIONS
 from src.lp_dossier import parse_lp_dossier
 from src.metadata_generator import load_metadata_cache
+from src.rotating_emblem import render_rotating_background
 from src.thumbnail_template import make_track_thumbnail
 
 AUDIO_EXTENSIONS = st.AUDIO_EXTENSIONS
@@ -689,11 +690,12 @@ def main():
     if thumb_template:
         shorts_visual_mode = st.ask(
             "¿Los Shorts deben usar clips de vídeo distintos por tema (hasta "
-            f"{N_CLIPS_PER_TRACK * SHORTS_PER_CLIP}, más variedad) o la "
+            f"{N_CLIPS_PER_TRACK * SHORTS_PER_CLIP}, más variedad), la "
             "miniatura fija de portada para todos (menos llamadas a la API, "
             f"pero como mucho {SHORTS_STATIC_IMAGE_TOP_N} Shorts realmente "
-            "distintos por tema — más no aporta nada, se repetirían)? "
-            "[clips/miniatura]",
+            "distintos por tema), o la miniatura con el emblema girando "
+            "(mismo ahorro de API que la miniatura fija, con el anillo y el "
+            "patrón interior del logo animados)? [clips/miniatura/reloj]",
             "clips",
         ).lower()
 
@@ -787,7 +789,19 @@ def main():
                 lyrics_path = tmp.name
 
             use_static_shorts = shorts_visual_mode.startswith("m") and thumbnails.get(track["number"])
-            if use_static_shorts:
+            use_rotating_shorts = shorts_visual_mode.startswith("r") and thumbnails.get(track["number"])
+            if use_rotating_shorts:
+                shorts_n = SHORTS_STATIC_IMAGE_TOP_N
+                shorts_clips_arg = None
+                rotating_out = str(
+                    miniaturas_dir / f"{_safe_filename(track['title']).replace(' ', '_')}_reloj.mp4"
+                )
+                print("   Generando fondo animado (anillo/patrón del emblema girando)...")
+                shorts_cover_override_arg = render_rotating_background(
+                    thumbnails[track["number"]], rotating_out,
+                )
+                print(f"   Shorts con emblema girando (hasta {shorts_n}): {shorts_cover_override_arg}")
+            elif use_static_shorts:
                 shorts_n = SHORTS_STATIC_IMAGE_TOP_N
                 shorts_clips_arg = None
                 shorts_cover_override_arg = thumbnails[track["number"]]
