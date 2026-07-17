@@ -53,6 +53,7 @@ if not os.environ.get("ANTHROPIC_API_KEY"):
 import subir_tema as st
 from main import process_track, resolve_cover, VIDEO_EXTENSIONS
 from src.lp_dossier import parse_lp_dossier
+from src.metadata_generator import load_metadata_cache
 from src.thumbnail_template import make_track_thumbnail
 
 AUDIO_EXTENSIONS = st.AUDIO_EXTENSIONS
@@ -695,6 +696,18 @@ def main():
             "[clips/miniatura]",
             "clips",
         ).lower()
+
+    metadata_cache_path = st.ask_path(
+        "Ruta a un archivo de metadatos pre-generados (título/descripción/"
+        "hashtags/etiquetas ya escritos, para no gastar API en ellos; Enter "
+        "para generarlos en directo con la API como siempre)",
+        required=False,
+    )
+    if metadata_cache_path:
+        load_metadata_cache(metadata_cache_path)
+        print(f"-> Metadatos pre-generados cargados desde {metadata_cache_path} "
+              "(se usan cuando hay una entrada para el tema; si falta alguno, "
+              "se genera en directo con la API como respaldo).")
 
     have_openai = bool(os.environ.get("OPENAI_API_KEY"))
     have_stock = bool(

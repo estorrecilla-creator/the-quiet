@@ -20,6 +20,38 @@ from src.anthropic_utils import call_claude_json
 
 MODEL = "claude-sonnet-5"
 
+# Caché opcional de metadatos pre-generados (por ejemplo, cuando se ha
+# agotado el saldo de la API a mitad de un LP y se quiere seguir sin
+# gastar más créditos en esta parte). Si está cargada, generate_metadata()
+# usa lo que haya para ese tema/tipo en vez de llamar a la API; si el tema
+# no está en la caché, sigue funcionando con la llamada en directo de
+# siempre. Para "short", la caché guarda un POOL de varias variantes por
+# tema (no una por cada Short — todos los Shorts de un mismo tema reciben
+# igualmente los mismos datos de entrada, así que no aporta nada generar
+# una única exacta por cada uno) y se van reutilizando cíclicamente.
+_CACHE = None
+_SHORT_POOL_INDEX = {}
+
+
+def load_metadata_cache(path: str) -> None:
+    global _CACHE, _SHORT_POOL_INDEX
+    with open(path, encoding="utf-8") as f:
+        _CACHE = json.load(f)
+    _SHORT_POOL_INDEX = {}
+
+
+def _cached_metadata(track_title: str, content_type: str):
+    if _CACHE is None:
+        return None
+    if content_type == "main":
+        return _CACHE.get("main", {}).get(track_title)
+    pool = _CACHE.get("shorts_pool", {}).get(track_title)
+    if not pool:
+        return None
+    idx = _SHORT_POOL_INDEX.get(track_title, 0)
+    _SHORT_POOL_INDEX[track_title] = idx + 1
+    return pool[idx % len(pool)]
+
 SYSTEM_PROMPT = """Eres el responsable de marketing musical del proyecto. Generas
 metadatos de YouTube optimizados para descubrimiento (SEO) sin caer en clickbait
 ni en promesas falsas. El tono debe ser coherente con la identidad artística
@@ -74,6 +106,10 @@ _HINTS = {
 
 
 def generate_metadata(artist, track_title, genre, context, content_type="main"):
+    cached = _cached_metadata(track_title, content_type)
+    if cached is not None:
+        return cached
+
     content_type_label = (
         "Vídeo largo de YouTube (tema completo o LP)"
         if content_type == "main"
