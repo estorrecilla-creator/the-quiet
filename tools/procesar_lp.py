@@ -861,7 +861,9 @@ def main():
             completed_tracks.add(track["number"])
             _save_generation_progress(lp_dir, completed_tracks, used_video_urls)
         except Exception as e:
+            import traceback
             print(f"  ERROR en el tema {track['number']} ({track['title']}): {e}")
+            traceback.print_exc()
             print("  Sigo con el siguiente tema.")
             fallos.append(f"{track['number']}. {track['title']}: {e}")
 
