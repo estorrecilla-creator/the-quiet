@@ -14,6 +14,7 @@ Para un LP completo, pásale una carpeta con varias pistas:
 import argparse
 import json
 import os
+import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -160,15 +161,22 @@ def process_track(
                 film_edit["tagged_scenes"], film_edit["exclude_ranges"],
                 min_cut=2.0, max_cut=8.0,
             )
-            main_edit_path = str(out_dir / "main_video_film_edit.mp4")
+            main_edit_path = tempfile.NamedTemporaryFile(suffix=".mp4", prefix="main_film_edit_", delete=False).name
             render_edit(film_edit["film_path"], main_film_edit, main_edit_path, w=1920, h=1080)
             main_cover = main_edit_path
         else:
             main_cover = cover
-        generate_main_video(
-            audio_path, main_cover, str(main_video_path), lyrics_path=lyrics_srt,
-            lyrics_offset=lyrics_offset, track_title=title,
-        )
+        try:
+            generate_main_video(
+                audio_path, main_cover, str(main_video_path), lyrics_path=lyrics_srt,
+                lyrics_offset=lyrics_offset, track_title=title,
+            )
+        finally:
+            # el montaje de la película es solo un paso intermedio (sin
+            # audio) para construir main_video.mp4 — no debe quedarse en la
+            # carpeta final, es fácil confundirlo con un vídeo roto.
+            if film_edit:
+                os.remove(main_edit_path)
 
         print("-> Generando metadatos del vídeo principal...")
         main_meta = generate_metadata(artist, title, genre, context, content_type="main")
@@ -188,27 +196,34 @@ def process_track(
                     audio_path, moment["start"], moment["end"],
                     film_edit["tagged_scenes"], film_edit["exclude_ranges"],
                 )
-                short_edit_path = str(shorts_dir / f"short_{i:02d}_film_edit.mp4")
+                short_edit_path = tempfile.NamedTemporaryFile(
+                    suffix=".mp4", prefix="short_film_edit_", delete=False
+                ).name
                 render_edit(film_edit["film_path"], short_edit, short_edit_path, w=1080, h=1920)
 
                 short_path = shorts_dir / f"short_{i:02d}.mp4"
-                generate_short(
-                    audio_path, short_edit_path, str(short_path), moment["start"], moment["end"],
-                    movement=MOVEMENTS[(i - 1) % len(MOVEMENTS)],
-                    lyrics_path=lyrics_srt,
-                    lyrics_offset=lyrics_offset,
-                    track_title=title,
-                    watermark_logo_light_path=watermark_logo_light_path,
-                    watermark_logo_dark_path=watermark_logo_dark_path,
-                    # 1.0s, no 0.0: el montaje empieza con un fundido a negro
-                    # (ver src/film_editor.py) — coger el fotograma de
-                    # referencia justo en el negro hace que el detector de
-                    # personas confunda el negro con "una persona ocupando
-                    # todo el encuadre" y tape el Short entero (mismo fallo
-                    # que en el vídeo principal, ver _extract_reference_frame).
-                    cover_offset=min(1.0, moment["end"] - moment["start"]),
-                    hook_text=None if lyrics_srt else title,
-                )
+                try:
+                    generate_short(
+                        audio_path, short_edit_path, str(short_path), moment["start"], moment["end"],
+                        movement=MOVEMENTS[(i - 1) % len(MOVEMENTS)],
+                        lyrics_path=lyrics_srt,
+                        lyrics_offset=lyrics_offset,
+                        track_title=title,
+                        watermark_logo_light_path=watermark_logo_light_path,
+                        watermark_logo_dark_path=watermark_logo_dark_path,
+                        # 1.0s, no 0.0: el montaje empieza con un fundido a negro
+                        # (ver src/film_editor.py) — coger el fotograma de
+                        # referencia justo en el negro hace que el detector de
+                        # personas confunda el negro con "una persona ocupando
+                        # todo el encuadre" y tape el Short entero (mismo fallo
+                        # que en el vídeo principal, ver _extract_reference_frame).
+                        cover_offset=min(1.0, moment["end"] - moment["start"]),
+                        hook_text=None if lyrics_srt else title,
+                    )
+                finally:
+                    # igual que en main_video: el montaje es solo un paso
+                    # intermedio (sin audio), no debe quedarse en SHORTS.
+                    os.remove(short_edit_path)
 
                 short_meta = generate_metadata(artist, title, genre, context, content_type="short")
                 with open(shorts_dir / f"short_{i:02d}_metadata.json", "w", encoding="utf-8") as f:
