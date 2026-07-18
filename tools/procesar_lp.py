@@ -681,7 +681,7 @@ def main():
         "Ruta a la plantilla de miniatura (portada del LP con el logo — se genera "
         "una miniatura por tema, con el nombre del tema, en cuanto su audio esté "
         "listo; Enter para usar un fotograma del vídeo en su lugar)",
-        required=False, default=memory.get("thumb_template"),
+        required=False, default=memory.get("thumb_template"), must_be_file=True,
     )
     memory["thumb_template"] = thumb_template
     st._save_memory(memory)

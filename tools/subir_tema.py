@@ -71,14 +71,26 @@ def ask(prompt, default=None, required=True):
         print("  Este dato es obligatorio.")
 
 
-def ask_path(prompt, required=True, default=None):
+def ask_path(prompt, required=True, default=None, must_be_file=False):
+    """
+    `must_be_file`: si se indica, rechaza rutas que sean una carpeta en
+    vez de un archivo — sin esto, una carpeta "existe" igual que un
+    archivo y pasaba la validación, dando luego un PermissionError
+    confuso más adelante (ej. al intentar abrirla como imagen con PIL)
+    en vez de avisar aquí mismo, al momento, de qué se ha escrito mal.
+    """
     while True:
         value = ask(prompt, default=default, required=required)
         if not value:
             return None
-        if Path(value).expanduser().exists():
-            return str(Path(value).expanduser())
-        print(f"  No encuentro el archivo: {value}")
+        resolved = Path(value).expanduser()
+        if not resolved.exists():
+            print(f"  No encuentro el archivo: {value}")
+            continue
+        if must_be_file and resolved.is_dir():
+            print(f"  Esa ruta es una carpeta, no un archivo: {value}")
+            continue
+        return str(resolved)
 
 
 def _find_audio_files():
