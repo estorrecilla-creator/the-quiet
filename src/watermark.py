@@ -26,6 +26,62 @@ from src.color_match import _get_video_duration
 
 DEFAULT_FONT = str(Path(__file__).resolve().parent.parent / "assets" / "fonts" / "Jura-Medium.ttf")
 
+
+def _strip_checkerboard_background(
+    img: Image.Image, min_coverage: float = 0.35, gray_tolerance: int = 8, tolerance: int = 10,
+) -> Image.Image:
+    """
+    Algunas herramientas "queman" el patrón de cuadrícula de transparencia
+    como píxeles reales de la imagen en vez de guardar transparencia de
+    verdad. Detecta ese patrón — dos colores NEUTROS (grises, blanco o
+    negro: R≈G≈B en cada uno, no coloreados) que dominan la imagen a
+    partes casi iguales, como corresponde a un tablero de cuadros que
+    alterna dos tonos — y los vuelve transparentes.
+
+    Importante: los dos colores del tablero suelen tener bastante
+    contraste ENTRE SÍ (ej. gris claro y blanco) — lo que los distingue
+    del contenido real del logo no es que sean parecidos entre ellos,
+    sino que cada uno es neutro/sin color y que juntos cubren gran parte
+    de la imagen a partes iguales. Si la imagen no tiene esa firma clara
+    (ej. ya tenía transparencia real, o el fondo no es un tablero de
+    cuadros), la deja tal cual — mejor no tocar nada que arriesgarse a
+    borrar parte del logo real por error.
+    """
+    rgba = img.convert("RGBA")
+    rgb = np.array(rgba.convert("RGB")).reshape(-1, 3)
+    colors, counts = np.unique(rgb, axis=0, return_counts=True)
+    order = np.argsort(-counts)
+    colors, counts = colors[order], counts[order]
+
+    def _is_neutral(color) -> bool:
+        return int(color.max()) - int(color.min()) <= gray_tolerance
+
+    neutral_idx = [i for i, c in enumerate(colors) if _is_neutral(c)]
+    if len(neutral_idx) < 2:
+        return rgba
+
+    top_i, second_i = neutral_idx[0], neutral_idx[1]
+    top_color, second_color = colors[top_i], colors[second_i]
+    top_count, second_count = counts[top_i], counts[second_i]
+    total_px = rgb.shape[0]
+
+    if np.array_equal(top_color, second_color):
+        return rgba
+
+    coverage = (top_count + second_count) / total_px
+    balance = min(top_count, second_count) / max(top_count, second_count)
+
+    is_checkerboard = coverage >= min_coverage and balance >= 0.7
+    if not is_checkerboard:
+        return rgba
+
+    arr = np.array(rgba)
+    for color in (top_color, second_color):
+        match = np.all(np.abs(arr[:, :, :3].astype(int) - color.astype(int)) <= tolerance, axis=-1)
+        arr[match, 3] = 0
+
+    return Image.fromarray(arr, "RGBA")
+
 # Zona de la esquina superior izquierda donde se coloca la pegatina, como
 # fracción del ancho/alto del vídeo — más generosa que el tamaño real de la
 # pegatina a propósito, para que el brillo medido sea representativo aunque
@@ -56,7 +112,7 @@ def make_watermark_sticker(
     logo_img = None
     logo_w = 0
     if logo_path:
-        logo_img = Image.open(logo_path).convert("RGBA")
+        logo_img = _strip_checkerboard_background(Image.open(logo_path))
         aspect = logo_img.width / logo_img.height
         logo_w = round(height_px * aspect)
         logo_img = logo_img.resize((logo_w, height_px), Image.LANCZOS)
