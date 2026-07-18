@@ -160,21 +160,29 @@ def build_energy_driven_edit(
     rms_norm = rms / (rms.max() + 1e-9)
 
     total = end - start
-    available = [
-        s for s in tagged_scenes
-        if f"{s['start']}-{s['end']}" not in exclude_ranges and (s["end"] - s["start"]) >= min_cut
-    ]
-    if not available:
-        raise RuntimeError("No quedan planos de la película sin usar que cumplan la duración mínima.")
+
+    def _shuffled_pools(scenes):
+        closeup = [s for s in scenes if s["type"] == "closeup"]
+        wide = [s for s in scenes if s["type"] == "wide"]
+        random.shuffle(closeup)
+        random.shuffle(wide)
+        return [closeup, wide]
+
+    all_valid = [s for s in tagged_scenes if (s["end"] - s["start"]) >= min_cut]
+    if not all_valid:
+        raise RuntimeError(
+            "Ningún plano de la película llega a la duración mínima de corte "
+            f"({min_cut}s) — prueba con una película con planos más largos, o "
+            "baja min_cut."
+        )
+
+    fresh = [s for s in all_valid if f"{s['start']}-{s['end']}" not in exclude_ranges]
+    pools = _shuffled_pools(fresh)
+    pool_i = 0
+    reused_any = False
 
     edit = []
     t = 0.0
-    closeup_pool = [s for s in available if s["type"] == "closeup"]
-    wide_pool = [s for s in available if s["type"] == "wide"]
-    random.shuffle(closeup_pool)
-    random.shuffle(wide_pool)
-    pools = [closeup_pool, wide_pool]
-    pool_i = 0
 
     while t < total:
         frame_idx = min(int((t / total) * len(rms_norm)), len(rms_norm) - 1)
@@ -191,7 +199,13 @@ def build_energy_driven_edit(
         if not pool:
             pool = pools[(pool_i + 1) % 2]
         if not pool:
-            raise RuntimeError("No quedan planos de la película sin usar.")
+            # Se acabaron los planos sin usar todavía — la película no tiene
+            # planos suficientes para cubrir todo el álbum sin repetir ni
+            # uno. Mejor reutilizar (de nuevo se prioriza variedad dentro de
+            # lo posible, barajando otra vez) que reventar la generación.
+            reused_any = True
+            pools = _shuffled_pools(all_valid)
+            pool = pools[pool_i % 2] or pools[(pool_i + 1) % 2]
         scene = pool.pop()
         pool_i += 1
 
@@ -203,6 +217,13 @@ def build_energy_driven_edit(
 
         edit.append({"start": scene_offset, "end": scene_offset + used_len, "cut_duration": used_len})
         t += used_len
+
+    if reused_any:
+        print(
+            "   Aviso: la película no tiene planos suficientes para cubrir "
+            "todo el álbum sin repetir ninguno — se han reutilizado algunos "
+            "(mezclados de nuevo al azar, no es el mismo tramo seguido)."
+        )
 
     return edit
 
