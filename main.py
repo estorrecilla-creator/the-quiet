@@ -27,6 +27,8 @@ from src.shorts_generator import generate_short
 from src.metadata_generator import generate_metadata
 from src.lyrics_align import resolve_lyrics_srt
 from src.cover_sequence import MOVEMENTS
+from src.film_editor import build_energy_driven_edit, render_edit
+from src.video_generator import _get_audio_duration as _get_track_duration
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".webm", ".mkv", ".m4v")
@@ -76,6 +78,7 @@ def process_track(
     lyrics_path=None, lyrics_offset=0.0, shorts_cover_override=None,
     watermark_logo_light_path=None, watermark_logo_dark_path=None,
     shorts_out_dir=None, shorts_clips=None, shorts_per_clip=3,
+    film_edit=None,
 ):
     """
     `shorts_out_dir`: si se indica, los Shorts se guardan ahí en vez de en
@@ -89,6 +92,15 @@ def process_track(
     de audio Y su propio mejor momento de vídeo dentro del clip— en vez de
     usar siempre la misma portada para los `n_shorts` Shorts. Sustituye por
     completo a `n_shorts`/`shorts_cover_override` cuando se usa.
+
+    `film_edit`: dict {"film_path", "tagged_scenes", "exclude_ranges"} — si
+    se indica, tanto el vídeo principal como los `n_shorts` Shorts se
+    montan con cortes reales de esa película (src.film_editor), con la
+    duración de cada corte variando según la energía del audio en ese
+    tramo. Sustituye por completo a `cover_path`/`shorts_clips`/
+    `shorts_cover_override` cuando se usa. `exclude_ranges` es un set
+    mutable compartido entre todos los temas del LP para no repetir el
+    mismo plano de la película dos veces en todo el álbum.
     """
     title_safe = title.replace(" ", "_")
     out_dir = Path(out_dir) / title_safe
@@ -96,8 +108,10 @@ def process_track(
     shorts_dir = Path(shorts_out_dir) / title_safe if shorts_out_dir else out_dir
     shorts_dir.mkdir(parents=True, exist_ok=True)
 
-    cover = resolve_cover(cover_path)
-    if shorts_clips:
+    cover = None if film_edit else resolve_cover(cover_path)
+    if film_edit:
+        cover_for_shorts = None
+    elif shorts_clips:
         # el modo "un Short por cada clip descargado" no necesita una
         # portada única para todos los Shorts, así que no hace falta
         # resolver `cover_for_shorts` en absoluto.
@@ -138,8 +152,21 @@ def process_track(
         # 1. Vídeo principal
         print("-> Generando vídeo principal...")
         main_video_path = out_dir / "main_video.mp4"
+        if film_edit:
+            print("   Montando la película (cortes sincronizados a la energía del audio)...")
+            total_duration = _get_track_duration(audio_path)
+            main_film_edit = build_energy_driven_edit(
+                audio_path, 0.0, total_duration,
+                film_edit["tagged_scenes"], film_edit["exclude_ranges"],
+                min_cut=2.0, max_cut=8.0,
+            )
+            main_edit_path = str(out_dir / "main_video_film_edit.mp4")
+            render_edit(film_edit["film_path"], main_film_edit, main_edit_path, w=1920, h=1080)
+            main_cover = main_edit_path
+        else:
+            main_cover = cover
         generate_main_video(
-            audio_path, cover, str(main_video_path), lyrics_path=lyrics_srt,
+            audio_path, main_cover, str(main_video_path), lyrics_path=lyrics_srt,
             lyrics_offset=lyrics_offset, track_title=title,
         )
 
@@ -149,7 +176,37 @@ def process_track(
             json.dump(main_meta, f, ensure_ascii=False, indent=2)
 
         # 2. Mejores momentos -> Shorts
-        if shorts_clips:
+        if film_edit:
+            print(f"-> Generando {n_shorts} Shorts montados con cortes de la película...")
+            moments = find_many_moments(audio_path, n_shorts, clip_duration=22.0)
+            for i, moment in enumerate(moments[:n_shorts], start=1):
+                print(
+                    f"-> Montando Short {i}/{n_shorts} "
+                    f"(audio {moment['start']:.1f}s-{moment['end']:.1f}s)..."
+                )
+                short_edit = build_energy_driven_edit(
+                    audio_path, moment["start"], moment["end"],
+                    film_edit["tagged_scenes"], film_edit["exclude_ranges"],
+                )
+                short_edit_path = str(shorts_dir / f"short_{i:02d}_film_edit.mp4")
+                render_edit(film_edit["film_path"], short_edit, short_edit_path, w=1080, h=1920)
+
+                short_path = shorts_dir / f"short_{i:02d}.mp4"
+                generate_short(
+                    audio_path, short_edit_path, str(short_path), moment["start"], moment["end"],
+                    movement=MOVEMENTS[(i - 1) % len(MOVEMENTS)],
+                    lyrics_path=lyrics_srt,
+                    lyrics_offset=lyrics_offset,
+                    track_title=title,
+                    watermark_logo_light_path=watermark_logo_light_path,
+                    watermark_logo_dark_path=watermark_logo_dark_path,
+                    hook_text=None if lyrics_srt else title,
+                )
+
+                short_meta = generate_metadata(artist, title, genre, context, content_type="short")
+                with open(shorts_dir / f"short_{i:02d}_metadata.json", "w", encoding="utf-8") as f:
+                    json.dump(short_meta, f, ensure_ascii=False, indent=2)
+        elif shorts_clips:
             total_shorts = len(shorts_clips) * shorts_per_clip
             print(
                 f"-> Generando {total_shorts} Shorts ({shorts_per_clip} por "
