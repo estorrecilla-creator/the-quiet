@@ -699,6 +699,24 @@ def main():
             "clips",
         ).lower()
 
+    film_edit_ctx = None
+    film_edit_path = st.ask_path(
+        "¿Usar cortes de una película (de dominio público, ya verificada) para "
+        "el vídeo principal y los Shorts de todo este LP, en vez de clips de "
+        "stock/miniatura/reloj? Ruta al archivo de la película (Enter para no "
+        "usar esta opción)",
+        required=False,
+    )
+    if film_edit_path:
+        from src.film_editor import detect_scenes, tag_scene_types
+        print("-> Detectando los planos de la película (una sola vez, puede tardar varios minutos)...")
+        scenes = detect_scenes(film_edit_path)
+        print(f"   {len(scenes)} planos detectados.")
+        print("-> Clasificando primeros planos / planos generales...")
+        tagged_scenes = tag_scene_types(film_edit_path, scenes)
+        film_edit_ctx = {"film_path": film_edit_path, "tagged_scenes": tagged_scenes, "exclude_ranges": set()}
+        print(f"   Listo — se usará esta película para los {len(pairs)} temas del LP.")
+
     metadata_cache_path = st.ask_path(
         "Ruta a un archivo de metadatos pre-generados (título/descripción/"
         "hashtags/etiquetas ya escritos, para no gastar API en ellos; Enter "
@@ -756,30 +774,38 @@ def main():
 
         print(f"\n--- Tema {track['number']}: {track['title']} ---")
         try:
-            track_reference = track_references.get(track["number"], reference_path)
-            if track_reference:
-                print(f"   Referencia de mastering: {track_reference}")
-            prepared_audio = _prepare_audio(
-                str(audio_path), track_reference,
-                title=track["title"], artist=artist, album=lp_title, genre=genre,
-                track_number=track["number"], total_tracks=len(pairs),
-                final_dir=str(audio_final_dir),
-            )
+            existing_audio = audio_final_dir / f"{track['number']:02d} - {_safe_filename(track['title'])}.wav"
+            if existing_audio.exists():
+                print(f"   Audio ya masterizado, no se vuelve a generar: {existing_audio}")
+                prepared_audio = str(existing_audio)
+            else:
+                track_reference = track_references.get(track["number"], reference_path)
+                if track_reference:
+                    print(f"   Referencia de mastering: {track_reference}")
+                prepared_audio = _prepare_audio(
+                    str(audio_path), track_reference,
+                    title=track["title"], artist=artist, album=lp_title, genre=genre,
+                    track_number=track["number"], total_tracks=len(pairs),
+                    final_dir=str(audio_final_dir),
+                )
 
             if thumb_template:
                 thumb_out = str(miniaturas_dir / f"{_safe_filename(track['title']).replace(' ', '_')}.jpg")
                 thumbnails[track["number"]] = make_track_thumbnail(thumb_template, track["title"], thumb_out)
                 print(f"   Miniatura generada: {thumbnails[track['number']]}")
 
-            cover = _resolve_cover_unattended(
-                artist, track_title, genre, track["context"], have_openai, have_stock, used_video_urls,
-            )
-            if cover is None:
-                raise RuntimeError("no se ha podido conseguir ninguna portada/vídeo para este tema")
+            cover = None
+            video_clips = []
+            if not film_edit_ctx:
+                cover = _resolve_cover_unattended(
+                    artist, track_title, genre, track["context"], have_openai, have_stock, used_video_urls,
+                )
+                if cover is None:
+                    raise RuntimeError("no se ha podido conseguir ninguna portada/vídeo para este tema")
 
-            resolved_cover = resolve_cover(cover)
-            resolved_list = resolved_cover if isinstance(resolved_cover, list) else [resolved_cover]
-            video_clips = [c for c in resolved_list if Path(c).suffix.lower() in VIDEO_EXTENSIONS]
+                resolved_cover = resolve_cover(cover)
+                resolved_list = resolved_cover if isinstance(resolved_cover, list) else [resolved_cover]
+                video_clips = [c for c in resolved_list if Path(c).suffix.lower() in VIDEO_EXTENSIONS]
 
             lyrics_path = None
             if track.get("lyrics"):
@@ -790,7 +816,12 @@ def main():
 
             use_static_shorts = shorts_visual_mode.startswith("m") and thumbnails.get(track["number"])
             use_rotating_shorts = shorts_visual_mode.startswith("r") and thumbnails.get(track["number"])
-            if use_rotating_shorts:
+            if film_edit_ctx:
+                shorts_n = SHORTS_STATIC_IMAGE_TOP_N
+                shorts_clips_arg = None
+                shorts_cover_override_arg = None
+                print(f"   Shorts y vídeo principal montados con cortes de la película (hasta {shorts_n} Shorts).")
+            elif use_rotating_shorts:
                 shorts_n = SHORTS_STATIC_IMAGE_TOP_N
                 shorts_clips_arg = None
                 rotating_out = str(
@@ -821,6 +852,7 @@ def main():
                     shorts_per_clip=SHORTS_PER_CLIP,
                     watermark_logo_light_path=watermark_logo_light,
                     watermark_logo_dark_path=watermark_logo_dark,
+                    film_edit=film_edit_ctx,
                 )
             finally:
                 if lyrics_path:
