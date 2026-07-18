@@ -200,6 +200,13 @@ def process_track(
                     track_title=title,
                     watermark_logo_light_path=watermark_logo_light_path,
                     watermark_logo_dark_path=watermark_logo_dark_path,
+                    # 1.0s, no 0.0: el montaje empieza con un fundido a negro
+                    # (ver src/film_editor.py) — coger el fotograma de
+                    # referencia justo en el negro hace que el detector de
+                    # personas confunda el negro con "una persona ocupando
+                    # todo el encuadre" y tape el Short entero (mismo fallo
+                    # que en el vídeo principal, ver _extract_reference_frame).
+                    cover_offset=min(1.0, moment["end"] - moment["start"]),
                     hook_text=None if lyrics_srt else title,
                 )
 

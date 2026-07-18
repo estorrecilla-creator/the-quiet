@@ -42,15 +42,23 @@ def _is_video_file(path: str) -> bool:
     return Path(path).suffix.lower() in VIDEO_EXTENSIONS
 
 
-def _extract_reference_frame(video_path: str) -> str:
+def _extract_reference_frame(video_path: str, t: float = 1.0) -> str:
     """
     Saca un fotograma del clip para usarlo donde hace falta una imagen
     fija (el contorno de la estrella, la detección de personas) — un
     clip de vídeo no sirve directamente para eso.
+
+    Por defecto se coge en t=1.0s, NO el fotograma 0: algunos clips (ej.
+    los montados con fundido a negro al empezar, ver src/film_editor.py)
+    tienen el primer fotograma en negro puro — con eso de referencia, el
+    detector de personas puede confundir el negro con "una persona
+    ocupando todo el encuadre" y generar un recorte negro que tapa el
+    vídeo entero (fallo real detectado y reproducido: vídeo con audio
+    pero completamente negro).
     """
     out_path = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False).name
     subprocess.run(
-        ["ffmpeg", "-y", "-i", video_path, "-frames:v", "1", "-q:v", "2", out_path],
+        ["ffmpeg", "-y", "-ss", str(t), "-i", video_path, "-frames:v", "1", "-q:v", "2", out_path],
         capture_output=True,
     )
     return out_path
