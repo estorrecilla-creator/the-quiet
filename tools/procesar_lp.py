@@ -863,8 +863,12 @@ def main():
         except Exception as e:
             import traceback
             print(f"  ERROR en el tema {track['number']} ({track['title']}): {e}")
-            traceback.print_exc()
             print("  Sigo con el siguiente tema.")
+            trace_text = traceback.format_exc()
+            errores_path = lp_dir / "errores_generacion.log"
+            with open(errores_path, "a", encoding="utf-8") as f:
+                f.write(f"\n=== Tema {track['number']}. {track['title']} ===\n{trace_text}\n")
+            print(f"  Detalle completo guardado en: {errores_path}")
             fallos.append(f"{track['number']}. {track['title']}: {e}")
 
     print(f"\n=== LP procesado: {len(out_dirs)}/{len(pairs)} temas generados ===")
