@@ -207,19 +207,38 @@ def build_energy_driven_edit(
     return edit
 
 
-def render_edit(film_path: str, edit, out_path: str, w: int = 1080, h: int = 1920, fps: int = 25) -> str:
+def render_edit(
+    film_path: str, edit, out_path: str, w: int = 1080, h: int = 1920, fps: int = 25,
+    fade_duration: float = 0.4,
+) -> str:
     """Extrae y encadena los planos de `edit` en un único vídeo de salida,
     escalado/recortado a (w, h), con la duración exacta de la suma de
-    `cut_duration`."""
+    `cut_duration`.
+
+    Nada de corte seco ni de disolución mezclando dos imágenes (efecto
+    "montaje"): cada plano funde a negro por completo antes de que
+    empiece el siguiente, con el aire retro/antiguo de las
+    transiciones de cine clásico — nunca se ven dos escenas distintas
+    superpuestas a la vez. `fade_duration` es el tiempo de fundido de
+    entrada/salida de cada plano (se recorta solo si el plano es más
+    corto que 2x ese tiempo, para no comerse todo el plano en el
+    fundido)."""
     tmp_dir = Path(tempfile.mkdtemp(prefix="film_edit_"))
     try:
         clip_paths = []
         for i, cut in enumerate(edit):
             clip_path = str(tmp_dir / f"cut_{i:03d}.mp4")
+            duration = cut["cut_duration"]
+            fd = min(fade_duration, max(duration / 2 - 0.02, 0.0))
+            fade_filter = (
+                f",fade=t=in:st=0:d={fd:.3f}:color=black,"
+                f"fade=t=out:st={max(duration - fd, 0.0):.3f}:d={fd:.3f}:color=black"
+                if fd > 0.02 else ""
+            )
             cmd = [
                 "ffmpeg", "-y", "-ss", str(cut["start"]), "-i", film_path,
-                "-t", str(cut["cut_duration"]),
-                "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps={fps},setsar=1",
+                "-t", str(duration),
+                "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps={fps},setsar=1{fade_filter}",
                 "-an", clip_path,
             ]
             result = subprocess.run(cmd, capture_output=True, text=True)
