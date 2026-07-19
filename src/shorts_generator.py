@@ -102,7 +102,12 @@ def generate_short(
     ass_path = None
     wm_sticker_path = None
     hook_srt_path = None
-    person_cutout = extract_person_cutout(reference_image)
+    # el recorte de persona congela UN fotograma y lo superpone estático
+    # sobre la portada — con una imagen fija no se nota, pero sobre un
+    # clip de vídeo real (portada = película) queda una silueta fija
+    # encima de una imagen que sí se mueve por debajo (efecto "ventana"/
+    # capa negra pegada). Por eso solo se aplica con portada de imagen.
+    person_cutout = extract_person_cutout(reference_image) if not is_video else None
     try:
         star_path_arg = escape_path(star_script)
 

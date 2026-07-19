@@ -162,7 +162,16 @@ def generate_main_video(
             f"[coverstim][star]overlay=x=0:y=0[coverstar]"
         )
 
-        raw_cutouts = [extract_person_cutout(img) for img in reference_images]
+        # el recorte de persona congela UN fotograma y lo superpone
+        # estático sobre la portada — con una imagen fija no se nota,
+        # pero sobre un clip de vídeo real (portada = película) queda
+        # una silueta fija encima de una imagen que sí se mueve por
+        # debajo (efecto "ventana"/capa negra pegada, fallo real
+        # reportado). Por eso solo se aplica con portada de imagen.
+        raw_cutouts = [
+            extract_person_cutout(img) if not is_video else None
+            for img, is_video in zip(reference_images, covers_are_video)
+        ]
         base_label = "coverstar"
         if any(c is not None for c in raw_cutouts):
             person_cutouts = [

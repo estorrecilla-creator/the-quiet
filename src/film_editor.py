@@ -122,10 +122,42 @@ def _is_closeup(frame_path: str, min_face_area_fraction: float = 0.12) -> bool:
         return False
 
 
+def _has_motion(film_path: str, start: float, end: float, min_diff: float = 4.0) -> bool:
+    """Heurístico: compara dos fotogramas dentro del plano (al 20% y al
+    80% de su duración) — si apenas cambian, es un plano estático (p.ej.
+    un cartel de texto/intertítulo de cine mudo), no imagen real en
+    movimiento. Si no se puede comprobar, se asume que sí tiene
+    movimiento (no se descarta un plano válido por error de sonda)."""
+    dur = end - start
+    t1 = start + dur * 0.2
+    t2 = start + dur * 0.8
+    with tempfile.TemporaryDirectory() as tmp:
+        f1 = str(Path(tmp) / "a.jpg")
+        f2 = str(Path(tmp) / "b.jpg")
+        subprocess.run(["ffmpeg", "-y", "-ss", str(t1), "-i", film_path, "-frames:v", "1", f1], capture_output=True)
+        subprocess.run(["ffmpeg", "-y", "-ss", str(t2), "-i", film_path, "-frames:v", "1", f2], capture_output=True)
+        if not Path(f1).exists() or not Path(f2).exists():
+            return True
+        try:
+            from PIL import Image
+            img1 = np.array(Image.open(f1).convert("L"), dtype=np.float32)
+            img2 = np.array(Image.open(f2).convert("L"), dtype=np.float32)
+            if img1.shape != img2.shape:
+                return True
+            return float(np.abs(img1 - img2).mean()) >= min_diff
+        except Exception:
+            return True
+
+
 def tag_scene_types(film_path: str, scenes, cache_path: str = None):
-    """Devuelve una lista de dicts [{"start", "end", "type": "closeup"|"wide"}, ...].
+    """Devuelve una lista de dicts
+    [{"start", "end", "type": "closeup"|"wide", "static": bool}, ...].
+    `static` marca planos sin movimiento real entre su inicio y su final
+    (carteles de texto/intertítulos de cine mudo) para poder excluirlos
+    del montaje — si no, con una película con muchos intertítulos el
+    resultado final puede parecer una imagen fija en vez de un montaje.
     Cachea junto al resultado de `detect_scenes` para no re-analizar."""
-    cache_path = cache_path or (film_path + ".scenetypes.json")
+    cache_path = cache_path or (film_path + ".scenetypes.v2.json")
     if Path(cache_path).exists():
         return json.loads(Path(cache_path).read_text(encoding="utf-8"))
 
@@ -135,7 +167,8 @@ def tag_scene_types(film_path: str, scenes, cache_path: str = None):
             frame_path = str(Path(tmp) / "frame.jpg")
             _extract_mid_frame(film_path, start, end, frame_path)
             scene_type = "closeup" if _is_closeup(frame_path) else "wide"
-            tagged.append({"start": start, "end": end, "type": scene_type})
+            static = not _has_motion(film_path, start, end)
+            tagged.append({"start": start, "end": end, "type": scene_type, "static": static})
 
     Path(cache_path).write_text(json.dumps(tagged), encoding="utf-8")
     return tagged
@@ -168,7 +201,17 @@ def build_energy_driven_edit(
         random.shuffle(wide)
         return [closeup, wide]
 
-    all_valid = [s for s in tagged_scenes if (s["end"] - s["start"]) >= min_cut]
+    def _long_enough(s):
+        return (s["end"] - s["start"]) >= min_cut
+
+    # se descartan los planos estáticos (carteles/intertítulos) del
+    # montaje: sin ellos el resultado se ve como cortes de película de
+    # verdad en vez de una imagen fija cambiando de cartel en cartel.
+    all_valid = [s for s in tagged_scenes if _long_enough(s) and not s.get("static", False)]
+    if not all_valid:
+        # si TODOS los planos válidos resultaran estáticos (poco probable
+        # salvo película casi solo de texto), mejor usar esos que reventar.
+        all_valid = [s for s in tagged_scenes if _long_enough(s)]
     if not all_valid:
         raise RuntimeError(
             "Ningún plano de la película llega a la duración mínima de corte "
