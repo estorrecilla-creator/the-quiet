@@ -178,6 +178,7 @@ def build_energy_driven_edit(
     audio_path: str, start: float, end: float, tagged_scenes,
     exclude_ranges: set, min_cut: float = 1.2, max_cut: float = 5.5,
     sr: int = 22050, used_scenes_out: list = None,
+    film_path: str = None, film_duration: float = None,
 ):
     """
     Decide la lista ordenada de cortes (planos + duración de cada uno)
@@ -190,8 +191,16 @@ def build_energy_driven_edit(
     más planos del álbum). Si se pasa `used_scenes_out` (lista mutable),
     se le añade cada plano de `tagged_scenes` realmente usado (fresco o
     reutilizado), útil para luego construir ese pool local por tema.
+
+    Si el pool disponible (fresco + reciclado) se queda corto y se pasa
+    `film_path`, en vez de fallar o repetir siempre los mismos planos se
+    pasa a coger segundos sueltos de cualquier punto de la película
+    completa (nunca error, nunca imagen fija — siempre cortes de
+    segundos distintos mientras la película tenga metraje de sobra).
+
     Devuelve una lista de dicts [{"start", "end", "cut_duration"}, ...]
-    con planos de `tagged_scenes`.
+    con planos de `tagged_scenes` (o, en el último recurso, de la
+    película completa).
     """
     y, _ = librosa.load(audio_path, sr=sr, offset=start, duration=end - start, mono=True)
     hop = 512
@@ -218,7 +227,7 @@ def build_energy_driven_edit(
         # si TODOS los planos válidos resultaran estáticos (poco probable
         # salvo película casi solo de texto), mejor usar esos que reventar.
         all_valid = [s for s in tagged_scenes if _long_enough(s)]
-    if not all_valid:
+    if not all_valid and not film_path:
         raise RuntimeError(
             "Ningún plano de la película llega a la duración mínima de corte "
             f"({min_cut}s) — prueba con una película con planos más largos, o "
@@ -229,6 +238,13 @@ def build_energy_driven_edit(
     pools = _shuffled_pools(fresh)
     pool_i = 0
     reused_any = False
+    reshuffle_count = 0
+    # sin ningún plano válido (caso extremo) pero con la película
+    # disponible, se salta directo a segundos sueltos en vez de dejar que
+    # el bucle intente sacar un plano de un pool vacío.
+    random_fallback_active = not all_valid and bool(film_path)
+    if film_path and film_duration is None:
+        film_duration = _probe_duration(film_path)
 
     edit = []
     t = 0.0
@@ -244,15 +260,32 @@ def build_energy_driven_edit(
             edit[-1]["cut_duration"] += cut_duration
             break
 
+        if random_fallback_active:
+            # el pool (fresco + reciclado) ya no da variedad de verdad —
+            # en vez de seguir repitiendo siempre los mismos planos, se
+            # coge un segundo cualquiera de la película entera.
+            scene_offset = random.uniform(0, max(film_duration - cut_duration, 0.0))
+            edit.append({"start": scene_offset, "end": scene_offset + cut_duration, "cut_duration": cut_duration})
+            t += cut_duration
+            continue
+
         pool = pools[pool_i % 2]
         if not pool:
             pool = pools[(pool_i + 1) % 2]
         if not pool:
-            # Se acabaron los planos sin usar todavía — la película no tiene
-            # planos suficientes para cubrir todo el álbum sin repetir ni
-            # uno. Mejor reutilizar (de nuevo se prioriza variedad dentro de
-            # lo posible, barajando otra vez) que reventar la generación.
+            # Se acabaron los planos sin usar todavía dentro de este pool.
             reused_any = True
+            reshuffle_count += 1
+            if reshuffle_count > 1 and film_path:
+                # ya se ha reciclado el mismo pool más de una vez: mejor
+                # pasar a segundos sueltos de toda la película (nunca
+                # error, nunca imagen fija) que seguir dando vueltas
+                # siempre a los mismos pocos planos.
+                random_fallback_active = True
+                scene_offset = random.uniform(0, max(film_duration - cut_duration, 0.0))
+                edit.append({"start": scene_offset, "end": scene_offset + cut_duration, "cut_duration": cut_duration})
+                t += cut_duration
+                continue
             pools = _shuffled_pools(all_valid)
             pool = pools[pool_i % 2] or pools[(pool_i + 1) % 2]
         scene = pool.pop()
@@ -269,7 +302,13 @@ def build_energy_driven_edit(
         edit.append({"start": scene_offset, "end": scene_offset + used_len, "cut_duration": used_len})
         t += used_len
 
-    if reused_any:
+    if random_fallback_active:
+        print(
+            "   Aviso: el pool de planos de este tramo se quedó corto — a "
+            "partir de cierto punto se han usado segundos sueltos de toda "
+            "la película en vez de solo los planos detectados/reciclados."
+        )
+    elif reused_any:
         print(
             "   Aviso: la película no tiene planos suficientes para cubrir "
             "todo el álbum sin repetir ninguno — se han reutilizado algunos "

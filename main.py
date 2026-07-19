@@ -163,6 +163,7 @@ def process_track(
                 film_edit["tagged_scenes"], film_edit["exclude_ranges"],
                 min_cut=2.0, max_cut=8.0,
                 used_scenes_out=track_used_scenes,
+                film_path=film_edit["film_path"],
             )
             # los Shorts de este mismo tema reutilizan SOLO estos planos (los
             # que ya salen en su vídeo principal) en vez de seguir gastando
@@ -214,6 +215,7 @@ def process_track(
                 short_edit = build_energy_driven_edit(
                     audio_path, moment["start"], moment["end"],
                     track_scene_pool, track_shorts_exclude,
+                    film_path=film_edit["film_path"],
                 )
                 short_edit_path = tempfile.NamedTemporaryFile(
                     suffix=".mp4", prefix="short_film_edit_", delete=False
