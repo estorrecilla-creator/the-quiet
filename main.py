@@ -153,14 +153,29 @@ def process_track(
         # 1. Vídeo principal
         print("-> Generando vídeo principal...")
         main_video_path = out_dir / "main_video.mp4"
+        track_scene_pool = None
         if film_edit:
             print("   Montando la película (cortes sincronizados a la energía del audio)...")
             total_duration = _get_track_duration(audio_path)
+            track_used_scenes = []
             main_film_edit = build_energy_driven_edit(
                 audio_path, 0.0, total_duration,
                 film_edit["tagged_scenes"], film_edit["exclude_ranges"],
                 min_cut=2.0, max_cut=8.0,
+                used_scenes_out=track_used_scenes,
             )
+            # los Shorts de este mismo tema reutilizan SOLO estos planos (los
+            # que ya salen en su vídeo principal) en vez de seguir gastando
+            # planos nuevos del álbum — si no, con 12 temas x (1 vídeo + 3
+            # Shorts) el pool de planos distintos de la película se agota
+            # enseguida (a partir del 2º-3º tema ya no quedan planos frescos).
+            seen_keys = set()
+            track_scene_pool = []
+            for s in track_used_scenes:
+                key = f"{s['start']}-{s['end']}"
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    track_scene_pool.append(s)
             main_edit_path = tempfile.NamedTemporaryFile(suffix=".mp4", prefix="main_film_edit_", delete=False).name
             render_edit(film_edit["film_path"], main_film_edit, main_edit_path, w=1920, h=1080)
             main_cover = main_edit_path
@@ -187,6 +202,10 @@ def process_track(
         if film_edit:
             print(f"-> Generando {n_shorts} Shorts montados con cortes de la película...")
             moments = find_many_moments(audio_path, n_shorts, clip_duration=22.0)
+            # pool local del tema (no el global del álbum): los Shorts de
+            # este tema pueden repetir entre sí los planos de su propio
+            # vídeo principal sin gastar más planos frescos del álbum.
+            track_shorts_exclude = set()
             for i, moment in enumerate(moments[:n_shorts], start=1):
                 print(
                     f"-> Montando Short {i}/{n_shorts} "
@@ -194,7 +213,7 @@ def process_track(
                 )
                 short_edit = build_energy_driven_edit(
                     audio_path, moment["start"], moment["end"],
-                    film_edit["tagged_scenes"], film_edit["exclude_ranges"],
+                    track_scene_pool, track_shorts_exclude,
                 )
                 short_edit_path = tempfile.NamedTemporaryFile(
                     suffix=".mp4", prefix="short_film_edit_", delete=False

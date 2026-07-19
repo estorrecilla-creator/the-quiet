@@ -177,13 +177,19 @@ def tag_scene_types(film_path: str, scenes, cache_path: str = None):
 def build_energy_driven_edit(
     audio_path: str, start: float, end: float, tagged_scenes,
     exclude_ranges: set, min_cut: float = 1.2, max_cut: float = 5.5,
-    sr: int = 22050,
+    sr: int = 22050, used_scenes_out: list = None,
 ):
     """
     Decide la lista ordenada de cortes (planos + duración de cada uno)
     para cubrir exactamente `end - start` segundos de audio, con cortes
     más rápidos en los tramos de más energía. `exclude_ranges` es un set
-    mutable de "start-end" ya usados en el álbum (se actualiza in-place).
+    mutable de "start-end" ya usados (se actualiza in-place) — puede ser
+    el pool global del álbum (para que cada tema use planos distintos a
+    los demás) o un pool local de un solo tema (para que sus Shorts
+    reutilicen los mismos planos que su vídeo principal en vez de gastar
+    más planos del álbum). Si se pasa `used_scenes_out` (lista mutable),
+    se le añade cada plano de `tagged_scenes` realmente usado (fresco o
+    reutilizado), útil para luego construir ese pool local por tema.
     Devuelve una lista de dicts [{"start", "end", "cut_duration"}, ...]
     con planos de `tagged_scenes`.
     """
@@ -251,6 +257,8 @@ def build_energy_driven_edit(
             pool = pools[pool_i % 2] or pools[(pool_i + 1) % 2]
         scene = pool.pop()
         pool_i += 1
+        if used_scenes_out is not None:
+            used_scenes_out.append(scene)
 
         key = f"{scene['start']}-{scene['end']}"
         exclude_ranges.add(key)
