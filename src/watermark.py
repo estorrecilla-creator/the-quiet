@@ -28,7 +28,8 @@ DEFAULT_FONT = str(Path(__file__).resolve().parent.parent / "assets" / "fonts" /
 
 
 def _strip_checkerboard_background(
-    img: Image.Image, min_coverage: float = 0.35, gray_tolerance: int = 8, tolerance: int = 10,
+    img: Image.Image, min_coverage: float = 0.35, gray_tolerance: int = 10,
+    cluster_tolerance: int = 20, quantize_step: int = 8,
 ) -> Image.Image:
     """
     Algunas herramientas "queman" el patrón de cuadrícula de transparencia
@@ -46,27 +47,51 @@ def _strip_checkerboard_background(
     (ej. ya tenía transparencia real, o el fondo no es un tablero de
     cuadros), la deja tal cual — mejor no tocar nada que arriesgarse a
     borrar parte del logo real por error.
+
+    Un archivo real (sobre todo si pasó por JPG o por cualquier
+    reescalado/compresión) casi nunca tiene los dos tonos del tablero
+    como colores planos exactos — la compresión los dispersa en cientos
+    de tonos casi iguales. Cuadricular por `quantize_step` reduce esos
+    tonos a un puñado de valores, pero un mismo tono real puede caer
+    partido en dos cuadrículas contiguas (ej. 251 y 253 con paso 8 caen
+    en cubos distintos) — por eso, tras cuadricular, se agrupan además
+    por cercanía real (`cluster_tolerance`): se toma el tono más
+    frecuente, se suman a él todos los tonos a menos de esa distancia, y
+    se repite con el resto, así el recuento total por tono no depende de
+    en qué lado del corte de la cuadrícula cayó cada píxel.
     """
     rgba = img.convert("RGBA")
-    rgb = np.array(rgba.convert("RGB")).reshape(-1, 3)
-    colors, counts = np.unique(rgb, axis=0, return_counts=True)
-    order = np.argsort(-counts)
-    colors, counts = colors[order], counts[order]
+    rgb = np.array(rgba.convert("RGB")).reshape(-1, 3).astype(int)
+
+    quantized = (rgb // quantize_step) * quantize_step + quantize_step // 2
+    q_colors, q_counts = np.unique(quantized, axis=0, return_counts=True)
 
     def _is_neutral(color) -> bool:
         return int(color.max()) - int(color.min()) <= gray_tolerance
 
-    neutral_idx = [i for i, c in enumerate(colors) if _is_neutral(c)]
-    if len(neutral_idx) < 2:
+    neutral_mask = np.array([_is_neutral(c) for c in q_colors])
+    q_colors, q_counts = q_colors[neutral_mask], q_counts[neutral_mask]
+    if len(q_colors) < 1:
         return rgba
 
-    top_i, second_i = neutral_idx[0], neutral_idx[1]
-    top_color, second_color = colors[top_i], colors[second_i]
-    top_count, second_count = counts[top_i], counts[second_i]
+    order = np.argsort(-q_counts)
+    q_colors, q_counts = q_colors[order], q_counts[order]
+
+    clusters = []  # (color_representativo, recuento_total)
+    used = np.zeros(len(q_colors), dtype=bool)
+    for i in range(len(q_colors)):
+        if used[i] or len(clusters) >= 2:
+            break
+        center = q_colors[i]
+        near = (~used) & (np.abs(q_colors - center).max(axis=1) <= cluster_tolerance)
+        clusters.append((center, int(q_counts[near].sum())))
+        used |= near
+
+    if len(clusters) < 2:
+        return rgba
+
+    (top_color, top_count), (second_color, second_count) = clusters[0], clusters[1]
     total_px = rgb.shape[0]
-
-    if np.array_equal(top_color, second_color):
-        return rgba
 
     coverage = (top_count + second_count) / total_px
     balance = min(top_count, second_count) / max(top_count, second_count)
@@ -77,7 +102,7 @@ def _strip_checkerboard_background(
 
     arr = np.array(rgba)
     for color in (top_color, second_color):
-        match = np.all(np.abs(arr[:, :, :3].astype(int) - color.astype(int)) <= tolerance, axis=-1)
+        match = (np.abs(rgb - color).max(axis=1) <= cluster_tolerance).reshape(arr.shape[:2])
         arr[match, 3] = 0
 
     return Image.fromarray(arr, "RGBA")
