@@ -5,12 +5,8 @@ Genera el vídeo largo (para YouTube normal) a partir de:
   - una o varias imágenes de portada (jpg/png). Con varias, cada una recibe
     su propio movimiento de cámara (zoom/paneo) y se encadenan en el tiempo.
 
-Usa el filtro nativo de ffmpeg `showwaves`/`avectorscope` mezclado sobre la
-portada, sin depender de moviepy para esta parte (ffmpeg puro es mucho más
-rápido y estable para renders largos de audio+imagen).
-
-Estilo: portada de fondo + barra de forma de onda semitransparente en la
-franja inferior (look estándar de canal de música/lyric-less video).
+Todo con ffmpeg puro, sin depender de moviepy (mucho más rápido y estable
+para renders largos de audio+imagen).
 """
 
 import os
@@ -69,9 +65,6 @@ def generate_main_video(
     cover_path,
     output_path: str,
     resolution: str = "1920x1080",
-    waveform_color: str = "0xE0B0FF",
-    waveform_height_ratio: float = 0.10,
-    waveform_rate: float = 7,
     zoom_speed: float = 0.0002,
     zoom_max: float = 1.15,
     lyrics_path: str = None,
@@ -89,13 +82,11 @@ def generate_main_video(
     Encima va un pequeño punto de luz que recorre despacio los contornos
     reales de la primera portada, variando su intensidad con la energía del
     audio (es la única parte que "reacciona" al ritmo) — pasa por detrás de
-    la persona detectada en cada imagen (si la hay) y por delante del resto
-    + waveform fina, discreta y lenta (para un resultado relajante). Si se
-    pasa `lyrics_path` (.srt con los tiempos de la letra), se superpone
-    sincronizada.
+    la persona detectada en cada imagen (si la hay) y por delante del resto.
+    Si se pasa `lyrics_path` (.srt con los tiempos de la letra), se
+    superpone sincronizada.
     """
     w, h = map(int, resolution.split("x"))
-    wave_h = int(h * waveform_height_ratio)
 
     covers = list(cover_path) if isinstance(cover_path, (list, tuple)) else [cover_path]
     covers_are_video = [_is_video_file(c) for c in covers]
@@ -153,8 +144,6 @@ def generate_main_video(
         idx += 1
 
         filter_complex = (
-            f"[0:a]showwaves=s={w}x{wave_h}:mode=cline:colors={waveform_color}:rate={waveform_rate},"
-            f"format=rgba,colorchannelmixer=aa=0.5[wave];"
             f"{cover_filter};"
             f"[cover]sendcmd=f='{star_path_arg}'[coverstim];"
             f"[{glow_idx}:v]scale={STAR_SIZE}:{STAR_SIZE},format=rgba,sendcmd=f='{star_path_arg}',"
@@ -213,17 +202,14 @@ def generate_main_video(
                     os.remove(c)
 
         # acabado cinematográfico (viñeta + grano + tinte sutil) sobre la
-        # capa de fondo, antes de la forma de onda/letra/marca de agua
-        # (para no ensuciar la legibilidad del texto ni oscurecer sus
-        # esquinas con la viñeta)
+        # capa de fondo, antes de la letra/marca de agua (para no ensuciar
+        # la legibilidad del texto ni oscurecer sus esquinas con la viñeta)
         filter_complex += f";{cinematic_grade_filter(base_label, 'graded')}"
         base_label = "graded"
-
-        filter_complex += f";[{base_label}][wave]overlay=0:{h - wave_h}:shortest=1[outv0]"
-        final_label = "outv0"
+        final_label = base_label
 
         if lyrics_path:
-            margin_v = wave_h + 12
+            margin_v = int(h * 0.04)
             ass_path = srt_to_ass(lyrics_path, w, h, margin_v, manual_shift=lyrics_offset)
             filter_complex += f";[{final_label}]{subtitles_filter_fragment(ass_path)}[outv1]"
             final_label = "outv1"

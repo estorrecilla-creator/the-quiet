@@ -1,8 +1,8 @@
 """
 shorts_generator.py
 A partir de un momento (start, end) detectado por audio_analysis.py, recorta
-el audio y genera un Short vertical 1080x1920 con portada + waveform,
-más un fade in/out para que no empiece/acabe en seco.
+el audio y genera un Short vertical 1080x1920 con portada, más un fade
+in/out para que no empiece/acabe en seco.
 """
 
 import os
@@ -68,8 +68,6 @@ def generate_short(
     start: float,
     end: float,
     fade_duration: float = 0.6,
-    waveform_color: str = "0xE0B0FF",
-    waveform_rate: float = 7,
     movement: str = "zoom_in",
     lyrics_path: str = None,
     lyrics_offset: float = 0.0,
@@ -91,7 +89,6 @@ def generate_short(
     """
     duration = end - start
     w, h = 1080, 1920
-    wave_h = int(h * 0.09)
 
     is_video = _is_video_file(cover_path)
     reference_image = _extract_reference_frame(cover_path, t=cover_offset) if is_video else cover_path
@@ -121,10 +118,7 @@ def generate_short(
 
         filter_complex = (
             f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS,"
-            f"afade=t=in:st=0:d={fade_duration},afade=t=out:st={duration - fade_duration}:d={fade_duration}[a0];"
-            f"[a0]asplit=2[aout][avis];"
-            f"[avis]showwaves=s={w}x{wave_h}:mode=cline:colors={waveform_color}:rate={waveform_rate},"
-            f"format=rgba,colorchannelmixer=aa=0.5[wave];"
+            f"afade=t=in:st=0:d={fade_duration},afade=t=out:st={duration - fade_duration}:d={fade_duration}[aout];"
             f"[1:v]{cover_chain},sendcmd=f='{star_path_arg}'[cover];"
             f"[2:v]scale={STAR_SIZE}:{STAR_SIZE},format=rgba,sendcmd=f='{star_path_arg}',"
             f"colorchannelmixer=aa=0.5[star];"
@@ -140,15 +134,13 @@ def generate_short(
             base_label = "coverstarperson"
 
         # acabado cinematográfico (viñeta + grano + tinte sutil) sobre la
-        # capa de fondo, antes de la forma de onda/letra/marca de agua
+        # capa de fondo, antes de la letra/marca de agua
         filter_complex += f";{cinematic_grade_filter(base_label, 'graded')}"
         base_label = "graded"
-
-        filter_complex += f";[{base_label}][wave]overlay=0:(H-h)/2:shortest=1[outv0]"
-        final_label = "outv0"
+        final_label = base_label
 
         if lyrics_path:
-            margin_v = wave_h + 12
+            margin_v = int(h * 0.04)
             ass_path = srt_to_ass(
                 lyrics_path, w, h, margin_v, offset=start, duration=duration,
                 manual_shift=lyrics_offset,
@@ -156,7 +148,7 @@ def generate_short(
             filter_complex += f";[{final_label}]{subtitles_filter_fragment(ass_path)}[outv1]"
             final_label = "outv1"
         elif hook_text:
-            margin_v = wave_h + 12
+            margin_v = int(h * 0.04)
             hook_srt_path = _build_hook_srt(hook_text, min(hook_duration, duration))
             # offset=0 (no `start`): el gancho está escrito ya en el tiempo
             # propio del Short (desde el segundo 0), no del tema completo.
