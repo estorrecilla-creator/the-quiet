@@ -251,7 +251,11 @@ def upload_lp_schedule(
     vídeos principales de los 12 temas, y solo después los Shorts — si
     no, con la cuota diaria y subiendo tema a tema completo (vídeo + sus
     ~45 Shorts) antes de pasar al siguiente, el último tema podría tardar
-    semanas en tener su vídeo principal arriba.
+    semanas en tener su vídeo principal arriba. Dentro de los Shorts, se
+    suben en el mismo orden en que están programados para publicarse
+    (por fecha), no agrupados por tema — si no, un Short con fecha de
+    publicación cercana podría no estar subido todavía porque el tema
+    anterior aún no ha terminado de subir los suyos.
 
     Para mantener al oyente el mayor tiempo posible escuchando la música
     (no solo viendo Shorts sueltos), enlaza:
@@ -363,20 +367,26 @@ def upload_lp_schedule(
             if main_item.get("video_id"):
                 main_video_id_by_track[tn] = main_item["video_id"]
 
-    # 2. Luego los Shorts, agrupados por tema (para poder enlazar cada uno
-    #    a su vídeo principal, que a estas alturas ya está subido).
-    for tn in track_numbers:
+    # 2. Luego los Shorts, EN EL MISMO ORDEN EN QUE SE VAN A PUBLICAR de
+    #    verdad (por publish_at_utc), no agrupados por tema uno detrás de
+    #    otro — si no, un Short de un tema que le toque publicarse pronto
+    #    podría quedarse sin subir todavía porque el tema anterior (con
+    #    sus ~45 Shorts propios) no ha terminado aún de subirse. El
+    #    calendario mezcla temas por fecha real de publicación (día a
+    #    día, con más de un tema a la vez), así que subir en ese mismo
+    #    orden es lo único que garantiza no quedarse atrás de ninguno.
+    all_shorts = sorted(
+        (i for i in schedule if i["kind"] == "short"),
+        key=lambda i: i["publish_at_utc"],
+    )
+    for item in all_shorts:
         if quota_exhausted:
             break
-        main_id = main_video_id_by_track.get(tn)
+        main_id = main_video_id_by_track.get(item["track_number"])
         watch_full_link = (
             f"\n\n🎧 Escucha el tema completo: https://youtu.be/{main_id}" if main_id else ""
         )
-        track_shorts = [i for i in schedule if i["track_number"] == tn and i["kind"] == "short"]
-        for item in track_shorts:
-            if quota_exhausted:
-                break
-            _upload_item(item, extra_description=watch_full_link)
+        _upload_item(item, extra_description=watch_full_link)
 
     if not quota_exhausted or quota_used + COST_VIDEO_UPDATE <= daily_quota_budget:
         sorted_tracks = sorted(main_video_id_by_track.keys())
