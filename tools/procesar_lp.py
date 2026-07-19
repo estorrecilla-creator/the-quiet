@@ -817,7 +817,10 @@ def main():
             use_static_shorts = shorts_visual_mode.startswith("m") and thumbnails.get(track["number"])
             use_rotating_shorts = shorts_visual_mode.startswith("r") and thumbnails.get(track["number"])
             if film_edit_ctx:
-                shorts_n = SHORTS_STATIC_IMAGE_TOP_N
+                # igual que el modo "clips" (15 x 3): con el reparto de
+                # planos por tema, más Shorts ya no gasta más planos
+                # frescos del álbum, solo reutiliza los del propio tema.
+                shorts_n = N_CLIPS_PER_TRACK * SHORTS_PER_CLIP
                 shorts_clips_arg = None
                 shorts_cover_override_arg = None
                 print(f"   Shorts y vídeo principal montados con cortes de la película (hasta {shorts_n} Shorts).")
