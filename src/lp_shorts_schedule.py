@@ -245,14 +245,20 @@ def upload_lp_schedule(
     miniatura} — la MISMA miniatura del tema se reutiliza para su vídeo
     principal y todos sus Shorts.
 
+    El orden de SUBIDA no afecta cuándo se publica de verdad cada vídeo
+    (eso lo fija `publishAt`), así que se prioriza tener el álbum entero
+    disponible en el canal cuanto antes: primero se suben TODOS los
+    vídeos principales de los 12 temas, y solo después los Shorts — si
+    no, con la cuota diaria y subiendo tema a tema completo (vídeo + sus
+    ~45 Shorts) antes de pasar al siguiente, el último tema podría tardar
+    semanas en tener su vídeo principal arriba.
+
     Para mantener al oyente el mayor tiempo posible escuchando la música
     (no solo viendo Shorts sueltos), enlaza:
     - Cada Short con el vídeo principal de SU tema ("escucha el tema
-      completo"). Por eso se sube agrupado por tema (el vídeo principal
-      antes que sus Shorts) en vez de en el orden cronológico de
-      publicación — el orden de SUBIDA no afecta cuándo se publica de
-      verdad (eso lo fija `publishAt`), y así el enlace ya está listo sin
-      tener que volver a tocar cada Short después.
+      completo") — como los vídeos principales van todos primero, el
+      enlace ya está listo sin tener que volver a tocar cada Short
+      después.
     - Cada vídeo principal con el SIGUIENTE tema del álbum en orden
       narrativo (para encadenar la escucha de todo el disco), en una
       segunda pasada — solo sobre los vídeos principales (pocos), no
@@ -340,25 +346,37 @@ def upload_lp_schedule(
     track_numbers = sorted({item["track_number"] for item in schedule})
     main_video_id_by_track = {}
 
+    # 1. Todos los vídeos principales primero, de todos los temas — para
+    #    que el álbum entero esté disponible en el canal cuanto antes, en
+    #    vez de quedar los últimos temas bloqueados detrás de los ~45
+    #    Shorts de cada uno de los temas anteriores (con la cuota diaria,
+    #    subir un tema entero -vídeo + Shorts- antes de pasar al
+    #    siguiente tardaría semanas en llegar al último tema).
     for tn in track_numbers:
         if quota_exhausted:
             break
-        track_items = [i for i in schedule if i["track_number"] == tn]
-        main_item = next((i for i in track_items if i["kind"] == "main"), None)
+        main_item = next(
+            (i for i in schedule if i["track_number"] == tn and i["kind"] == "main"), None,
+        )
         if main_item:
             _upload_item(main_item)
             if main_item.get("video_id"):
                 main_video_id_by_track[tn] = main_item["video_id"]
 
+    # 2. Luego los Shorts, agrupados por tema (para poder enlazar cada uno
+    #    a su vídeo principal, que a estas alturas ya está subido).
+    for tn in track_numbers:
+        if quota_exhausted:
+            break
         main_id = main_video_id_by_track.get(tn)
         watch_full_link = (
             f"\n\n🎧 Escucha el tema completo: https://youtu.be/{main_id}" if main_id else ""
         )
-        for item in track_items:
+        track_shorts = [i for i in schedule if i["track_number"] == tn and i["kind"] == "short"]
+        for item in track_shorts:
             if quota_exhausted:
                 break
-            if item["kind"] == "short":
-                _upload_item(item, extra_description=watch_full_link)
+            _upload_item(item, extra_description=watch_full_link)
 
     if not quota_exhausted or quota_used + COST_VIDEO_UPDATE <= daily_quota_budget:
         sorted_tracks = sorted(main_video_id_by_track.keys())
