@@ -117,9 +117,20 @@ def main():
     from src.youtube_uploader import append_to_video_description
     from src.streaming_links import BLOCK_MARKER
     from src.youtube_comments import post_comment, update_comment
+    from src.lp_shorts_schedule import _is_published
 
+    pending_comment = 0
     for item in uploaded:
+        # la descripción se puede editar aunque el vídeo siga programado/
+        # privado, así que esto funciona siempre.
         append_to_video_description(item["video_id"], block, marker=BLOCK_MARKER)
+        # el comentario NO -- YouTube lo rechaza en vídeos todavía
+        # privados (403 "forbidden"). Si aún no es público, se deja para
+        # que lo coja solo la subida diaria en cuanto le toque publicarse
+        # (no es un fallo, es esperado con vídeos programados).
+        if not _is_published(item["publish_at_utc"]):
+            pending_comment += 1
+            continue
         try:
             if item.get("comment_id"):
                 update_comment(youtube, item["comment_id"], block)
@@ -129,6 +140,12 @@ def main():
         except Exception as e:
             print(f"   Aviso: no se pudo actualizar el comentario de {item['video_id']} ({e}).")
     save_lp_schedule(schedule, schedule_path)
+    if pending_comment:
+        print(
+            f"({pending_comment} vídeo(s) todavía programado(s)/privado(s) — su "
+            "comentario con los enlaces se publicará solo en cuanto se hagan "
+            "públicos, sin que tengas que hacer nada.)"
+        )
     print(
         "Listo. Los vídeos que todavía falten por subir (por la cuota "
         "diaria) también los llevarán en cuanto les toque."

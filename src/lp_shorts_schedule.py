@@ -29,7 +29,7 @@ sitio: basta con relanzar la misma fase en días sucesivos hasta terminar.
 
 import json
 import re
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -61,6 +61,14 @@ def _with_hashtags(meta):
 def _to_utc(d: date, t: time) -> str:
     local_dt = datetime.combine(d, t, tzinfo=MADRID_TZ)
     return local_dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _is_published(publish_at_utc: str) -> bool:
+    """Ya pasó su fecha de publicación programada -> el vídeo debería ser
+    público de verdad. Antes de eso, YouTube rechaza crear comentarios en
+    él (sigue siendo privado aunque la subida en sí haya ido bien)."""
+    dt = datetime.strptime(publish_at_utc, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) >= dt
 
 
 def _to_local_label(d: date, t: time) -> str:
@@ -337,15 +345,14 @@ def upload_lp_schedule(
             add_video_to_playlist(youtube, playlist_id, video_id, position=position)
             print(f"-> Añadido a la lista de reproducción (posición {position}).")
 
-        comment_text = (extra_description + link_block).strip()
-        if comment_text:
-            try:
-                from src.youtube_comments import post_comment
-                item["comment_id"] = post_comment(_get_youtube(), video_id, comment_text)
-                save_lp_schedule(schedule, save_path)
-                print("-> Comentario publicado con los enlaces (recuerda fijarlo tú si quieres verlo arriba de todo — eso no lo puede hacer la API).")
-            except Exception as e:
-                print(f"   Aviso: no se pudo publicar el comentario ({e}). El vídeo sigue subido bien.")
+        # el comentario NO se intenta aquí: el vídeo se sube programado
+        # (publishAt futuro) y sigue siendo privado hasta esa fecha —
+        # YouTube rechaza crear comentarios en un vídeo todavía privado
+        # ("403 forbidden"), así que intentarlo justo al subir fallaría
+        # siempre. Se publica más abajo, en la pasada de comentarios
+        # pendientes, que solo actúa sobre vídeos ya públicos de verdad
+        # (y se puede relanzar cualquier día para ir cogiendo los que se
+        # hayan ido publicando desde la última vez).
 
     track_numbers = sorted({item["track_number"] for item in schedule})
     main_video_id_by_track = {}
@@ -412,6 +419,39 @@ def upload_lp_schedule(
             main_item["linked_next"] = True
             quota_used += COST_VIDEO_UPDATE
             save_lp_schedule(schedule, save_path)
+
+    # 4. Comentarios pendientes: vídeos ya subidos y YA públicos de
+    #    verdad (pasó su publish_at_utc) que todavía no tienen comentario
+    #    — normal que haya varios, ya que al subirlos seguían privados/
+    #    programados. Se puede (y debe) relanzar cada día para ir
+    #    cogiendo los que se vayan publicando desde la última vez.
+    if not quota_exhausted or quota_used + COST_COMMENT_INSERT <= daily_quota_budget:
+        for item in schedule:
+            if quota_used + COST_COMMENT_INSERT > daily_quota_budget:
+                break
+            if not item.get("video_id") or item.get("comment_id"):
+                continue
+            if not _is_published(item["publish_at_utc"]):
+                continue
+            if item["kind"] == "short":
+                main_id = main_video_id_by_track.get(item["track_number"])
+                extra = f"\n\n🎧 Escucha el tema completo: https://youtu.be/{main_id}" if main_id else ""
+            else:
+                extra = ""
+            comment_text = (extra + link_block).strip()
+            if not comment_text:
+                continue
+            try:
+                from src.youtube_comments import post_comment
+                item["comment_id"] = post_comment(_get_youtube(), item["video_id"], comment_text)
+                quota_used += COST_COMMENT_INSERT
+                save_lp_schedule(schedule, save_path)
+                print(
+                    f"-> Comentario publicado en {Path(item['video_path']).name} "
+                    "(recuerda fijarlo tú si quieres verlo arriba de todo — eso no lo puede hacer la API)."
+                )
+            except Exception as e:
+                print(f"   Aviso: no se pudo publicar el comentario de {Path(item['video_path']).name} ({e}).")
             print(f"-> Tema {tn} enlazado con el siguiente del álbum.")
 
     total = len(schedule)
