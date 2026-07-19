@@ -541,8 +541,16 @@ def _run_youtube_phase(
         playlist_id = create_or_get_playlist(youtube, playlist_name)
         print(f"-> Lista de reproducción: {playlist_url(playlist_id)}")
         link_block += f"\n\n▶ Escucha todo el álbum: {playlist_url(playlist_id)}"
-        add_playlist_to_section(youtube, playlist_id, section_title="Álbumes")
-        print('-> Añadida a la sección "Álbumes" de la página de inicio del canal.')
+        try:
+            add_playlist_to_section(youtube, playlist_id, section_title="Álbumes")
+            print('-> Añadida a la sección "Álbumes" de la página de inicio del canal.')
+        except Exception as e:
+            # paso decorativo: YouTube rechaza crear/editar secciones de
+            # canal ("channelNotActive") en canales muy nuevos que
+            # todavía no tienen vídeos públicos — no debe bloquear la
+            # subida real de los vídeos, que es lo que importa. Se puede
+            # reintentar más adelante a mano cuando el canal esté activo.
+            print(f'   Aviso: no se pudo añadir a la sección "Álbumes" del canal ({e}). Sigo con la subida.')
 
         print("-> Generando descripción optimizada de la lista de reproducción (hashtags incluidos)...")
         playlist_meta = generate_playlist_metadata(artist, lp_title, genre, concept)
