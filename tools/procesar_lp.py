@@ -527,13 +527,19 @@ def _run_youtube_phase(
         print(f"No se ha subido nada. Calendario guardado en {save_path} — puedes revisarlo y relanzar esta fase más tarde.")
         return
 
+    from src.streaming_links import load_streaming_links, build_streaming_block
+    streaming_block = build_streaming_block(load_streaming_links(lp_dir))
+
     youtube = None
     playlist_id = None
+    shorts_playlist_id = None
     link_block = ""
     track_positions = {t["number"]: t["number"] - 1 for t in tracks}
     if playlist_name:
         from src.youtube_uploader import get_authenticated_service
-        from src.youtube_playlists import create_or_get_playlist, playlist_url
+        from src.youtube_playlists import (
+            create_or_get_playlist, playlist_url, update_playlist_description,
+        )
         from src.youtube_sections import add_playlist_to_section
         from src.metadata_generator import generate_playlist_metadata
         from src.discografia import register_and_link_lp_playlist
@@ -564,11 +570,24 @@ def _run_youtube_phase(
             "álbumes del grupo (y los demás álbumes ya suben también su "
             "enlace a este)."
         )
+
+        # lista de reproducción SOLO para los Shorts de este LP -- para que
+        # quien vea uno pueda seguir viendo los demás sin salir del canal
+        # (mismo objetivo de "watch time" en cadena que la lista del
+        # álbum), con enlace de vuelta al álbum completo y a streaming.
+        shorts_playlist_title = f"{playlist_name} — Shorts"
+        shorts_playlist_id = create_or_get_playlist(youtube, shorts_playlist_title)
+        shorts_playlist_description = (
+            f"Shorts de \"{lp_title}\" — {artist}.\n\n"
+            f"▶ Escucha el álbum completo: {playlist_url(playlist_id)}"
+        )
+        if streaming_block:
+            shorts_playlist_description += f"\n\n{streaming_block}"
+        update_playlist_description(youtube, shorts_playlist_id, shorts_playlist_description)
+        print(f"-> Lista de reproducción de Shorts: {playlist_url(shorts_playlist_id)}")
+
     if extra_links:
         link_block += f"\n\n{extra_links}"
-
-    from src.streaming_links import load_streaming_links, build_streaming_block
-    streaming_block = build_streaming_block(load_streaming_links(lp_dir))
     if streaming_block:
         link_block += f"\n\n{streaming_block}"
 
@@ -578,12 +597,14 @@ def _run_youtube_phase(
             "thumbnails": {str(k): v for k, v in thumbnails.items()},
             "link_block": link_block,
             "playlist_id": playlist_id,
+            "shorts_playlist_id": shorts_playlist_id,
             "idioma": idioma,
             "track_positions": {str(k): v for k, v in track_positions.items()},
         }, f, ensure_ascii=False, indent=2)
 
     upload_lp_schedule(
         schedule, save_path, thumbnails=thumbnails, playlist_id=playlist_id,
+        shorts_playlist_id=shorts_playlist_id,
         youtube=youtube, link_block=link_block, idioma=idioma, track_positions=track_positions,
     )
 

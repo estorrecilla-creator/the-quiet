@@ -79,8 +79,28 @@ def _process_lp(lp_dir: Path):
     if streaming_block and streaming_block not in link_block:
         link_block += f"\n\n{streaming_block}"
 
+    # lista de reproducción de Shorts: si este LP se confirmó ANTES de que
+    # existiera esta función, no tendrá una todavía -- se crea aquí, una
+    # sola vez, en cuanto haya conexión a YouTube (no hace falta relanzar
+    # procesar_lp.py para conseguirla).
+    shorts_playlist_id = config.get("shorts_playlist_id")
+    if playlist_id and not shorts_playlist_id:
+        from src.youtube_playlists import create_or_get_playlist, update_playlist_description, playlist_url
+        main_playlist = youtube.playlists().list(part="snippet", id=playlist_id).execute()
+        items = main_playlist.get("items", [])
+        main_title = items[0]["snippet"]["title"] if items else lp_dir.name
+        shorts_playlist_id = create_or_get_playlist(youtube, f"{main_title} — Shorts")
+        shorts_description = f'Shorts de "{lp_dir.name}".\n\n▶ Escucha el álbum completo: {playlist_url(playlist_id)}'
+        if streaming_block:
+            shorts_description += f"\n\n{streaming_block}"
+        update_playlist_description(youtube, shorts_playlist_id, shorts_description)
+        config["shorts_playlist_id"] = shorts_playlist_id
+        config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"-> Lista de reproducción de Shorts creada: {playlist_url(shorts_playlist_id)}")
+
     upload_lp_schedule(
         schedule, schedule_path, thumbnails=thumbnails, playlist_id=playlist_id,
+        shorts_playlist_id=shorts_playlist_id,
         youtube=youtube, link_block=link_block,
         idioma=config.get("idioma"), track_positions=track_positions,
     )

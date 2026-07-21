@@ -242,8 +242,8 @@ def _is_quota_error(exc) -> bool:
 
 
 def upload_lp_schedule(
-    schedule, save_path, thumbnails=None, playlist_id=None, youtube=None,
-    link_block: str = "", idioma: str = None, track_positions=None,
+    schedule, save_path, thumbnails=None, playlist_id=None, shorts_playlist_id=None,
+    youtube=None, link_block: str = "", idioma: str = None, track_positions=None,
     daily_quota_budget: int = DEFAULT_DAILY_QUOTA_BUDGET,
 ):
     """
@@ -297,6 +297,8 @@ def upload_lp_schedule(
             cost += COST_THUMBNAIL_SET
         if playlist_id and item["kind"] == "main":
             cost += COST_PLAYLIST_INSERT
+        if shorts_playlist_id and item["kind"] == "short":
+            cost += COST_PLAYLIST_INSERT
         return cost
 
     def _get_youtube():
@@ -344,6 +346,11 @@ def upload_lp_schedule(
             position = track_positions.get(item["track_number"])
             add_video_to_playlist(youtube, playlist_id, video_id, position=position)
             print(f"-> Añadido a la lista de reproducción (posición {position}).")
+        if shorts_playlist_id and item["kind"] == "short":
+            from src.youtube_playlists import add_video_to_playlist
+            add_video_to_playlist(youtube, shorts_playlist_id, video_id)
+            item["in_shorts_playlist"] = True
+            print("-> Añadido a la lista de reproducción de Shorts.")
 
         # el comentario NO se intenta aquí: el vídeo se sube programado
         # (publishAt futuro) y sigue siendo privado hasta esa fecha —
@@ -419,6 +426,7 @@ def upload_lp_schedule(
             main_item["linked_next"] = True
             quota_used += COST_VIDEO_UPDATE
             save_lp_schedule(schedule, save_path)
+            print(f"-> Tema {tn} enlazado con el siguiente del álbum.")
 
     # 4. Comentarios pendientes: vídeos ya subidos y YA públicos de
     #    verdad (pasó su publish_at_utc) que todavía no tienen comentario
@@ -452,7 +460,24 @@ def upload_lp_schedule(
                 )
             except Exception as e:
                 print(f"   Aviso: no se pudo publicar el comentario de {Path(item['video_path']).name} ({e}).")
-            print(f"-> Tema {tn} enlazado con el siguiente del álbum.")
+
+    # 5. Por si algún Short ya estaba subido de antes de que existiera su
+    #    lista de reproducción (o de que se creara para este LP en
+    #    concreto): se añaden ahora, cada uno una sola vez.
+    if shorts_playlist_id:
+        for item in schedule:
+            if quota_used + COST_PLAYLIST_INSERT > daily_quota_budget:
+                break
+            if item["kind"] != "short" or not item.get("video_id") or item.get("in_shorts_playlist"):
+                continue
+            try:
+                from src.youtube_playlists import add_video_to_playlist
+                add_video_to_playlist(_get_youtube(), shorts_playlist_id, item["video_id"])
+                item["in_shorts_playlist"] = True
+                quota_used += COST_PLAYLIST_INSERT
+                save_lp_schedule(schedule, save_path)
+            except Exception as e:
+                print(f"   Aviso: no se pudo añadir {Path(item['video_path']).name} a la lista de Shorts ({e}).")
 
     total = len(schedule)
     subidos = sum(1 for i in schedule if i.get("video_id"))
