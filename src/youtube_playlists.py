@@ -6,6 +6,10 @@ YouTube premia el "watch time" en cadena (que la gente vaya de un vídeo al
 siguiente sin salir del canal).
 """
 
+import os
+import tempfile
+from pathlib import Path
+
 from googleapiclient.errors import HttpError
 
 
@@ -83,3 +87,40 @@ def update_playlist_description(youtube, playlist_id: str, description: str):
     snippet = items[0]["snippet"]
     snippet["description"] = description
     youtube.playlists().update(part="snippet", body={"id": playlist_id, "snippet": snippet}).execute()
+
+
+def set_playlist_thumbnail(youtube, playlist_id: str, image_path: str):
+    """
+    Sube `image_path` como miniatura de la lista de reproducción
+    `playlist_id` (endpoint playlistImages — necesita imagen CUADRADA,
+    1:1, JPEG o PNG, máximo 2MB). Si la imagen no es cuadrada, se recorta
+    al cuadrado central antes de subirla, sin tocar el archivo original.
+    """
+    from googleapiclient.http import MediaFileUpload
+    from PIL import Image
+
+    img = Image.open(image_path)
+    w, h = img.size
+    tmp_path = None
+    if w != h:
+        side = min(w, h)
+        left, top = (w - side) // 2, (h - side) // 2
+        cropped = img.crop((left, top, left + side, top + side))
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=Path(image_path).suffix or ".jpg", prefix="playlist_thumb_", delete=False,
+        )
+        tmp.close()
+        cropped.save(tmp.name)
+        tmp_path = tmp.name
+
+    upload_path = tmp_path or image_path
+    try:
+        media = MediaFileUpload(upload_path)
+        youtube.playlistImages().insert(
+            part="snippet",
+            body={"snippet": {"playlistId": playlist_id, "type": "hero"}},
+            media_body=media,
+        ).execute()
+    finally:
+        if tmp_path:
+            os.remove(tmp_path)

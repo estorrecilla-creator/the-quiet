@@ -496,6 +496,11 @@ def _run_youtube_phase(
 
     idioma = st.ask("Idioma principal del contenido (es/en...; Enter para no indicarlo)", required=False)
     playlist_name = st.ask("Nombre de la lista de reproducción del LP (Enter para no usar ninguna)", required=False)
+    playlist_thumbnail_path = st.ask_path(
+        "Ruta a una imagen CUADRADA para la miniatura de las listas de reproducción "
+        "(álbum y Shorts; Enter para dejarlas sin miniatura personalizada)",
+        required=False, must_be_file=True,
+    )
     extra_links = st.ask("Enlaces extra para la descripción (redes, web...; Enter para ninguno)", required=False)
     main_hora_raw = st.ask("Hora de publicación del vídeo principal de cada tema (hora de España, HH:MM)", "18:00")
     main_hh, main_mm = (int(x) for x in main_hora_raw.split(":"))
@@ -539,6 +544,7 @@ def _run_youtube_phase(
         from src.youtube_uploader import get_authenticated_service
         from src.youtube_playlists import (
             create_or_get_playlist, playlist_url, update_playlist_description,
+            set_playlist_thumbnail,
         )
         from src.youtube_sections import add_playlist_to_section
         from src.metadata_generator import generate_playlist_metadata
@@ -586,6 +592,14 @@ def _run_youtube_phase(
         update_playlist_description(youtube, shorts_playlist_id, shorts_playlist_description)
         print(f"-> Lista de reproducción de Shorts: {playlist_url(shorts_playlist_id)}")
 
+        if playlist_thumbnail_path:
+            try:
+                set_playlist_thumbnail(youtube, playlist_id, playlist_thumbnail_path)
+                set_playlist_thumbnail(youtube, shorts_playlist_id, playlist_thumbnail_path)
+                print("-> Miniatura puesta en las dos listas de reproducción.")
+            except Exception as e:
+                print(f"   Aviso: no se pudo poner la miniatura de las listas ({e}).")
+
     if extra_links:
         link_block += f"\n\n{extra_links}"
     if streaming_block:
@@ -598,6 +612,8 @@ def _run_youtube_phase(
             "link_block": link_block,
             "playlist_id": playlist_id,
             "shorts_playlist_id": shorts_playlist_id,
+            "playlist_thumbnail_path": playlist_thumbnail_path,
+            "playlist_thumbnail_applied": bool(playlist_thumbnail_path),
             "idioma": idioma,
             "track_positions": {str(k): v for k, v in track_positions.items()},
         }, f, ensure_ascii=False, indent=2)

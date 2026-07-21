@@ -98,6 +98,23 @@ def _process_lp(lp_dir: Path):
         config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"-> Lista de reproducción de Shorts creada: {playlist_url(shorts_playlist_id)}")
 
+    # miniatura de las listas de reproducción: se aplica una sola vez, en
+    # cuanto haya una ruta guardada en la configuración (para un LP
+    # confirmado antes de que existiera esta opción, basta con añadir
+    # "playlist_thumbnail_path" a mano en config_subida_youtube.json).
+    thumb_path = config.get("playlist_thumbnail_path")
+    if thumb_path and not config.get("playlist_thumbnail_applied") and playlist_id:
+        from src.youtube_playlists import set_playlist_thumbnail
+        try:
+            set_playlist_thumbnail(youtube, playlist_id, thumb_path)
+            if shorts_playlist_id:
+                set_playlist_thumbnail(youtube, shorts_playlist_id, thumb_path)
+            config["playlist_thumbnail_applied"] = True
+            config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+            print("-> Miniatura puesta en las listas de reproducción.")
+        except Exception as e:
+            print(f"   Aviso: no se pudo poner la miniatura de las listas ({e}).")
+
     upload_lp_schedule(
         schedule, schedule_path, thumbnails=thumbnails, playlist_id=playlist_id,
         shorts_playlist_id=shorts_playlist_id,
