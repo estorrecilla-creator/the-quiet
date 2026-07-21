@@ -218,14 +218,23 @@ def load_lp_schedule(path):
 # exactos al 100%, pero de sobra para no pasarnos): subir un vídeo cuesta
 # 1600, ponerle miniatura 50, añadirlo a una lista de reproducción 50,
 # actualizar su descripción ~50, publicar un comentario ~50. La cuota
-# gratuita por defecto es 10.000 unidades/día — con eso solo caben ~5-6
-# vídeos subidos al día.
+# gratuita por defecto ronda las 10.000 unidades/día — con eso caben
+# unos ~5-6 vídeos por LLAMADA, pero esto es solo una estimación interna
+# nuestra, no lo que Google aplica de verdad.
 COST_VIDEO_INSERT = 1600
 COST_THUMBNAIL_SET = 50
 COST_PLAYLIST_INSERT = 50
 COST_VIDEO_UPDATE = 50
 COST_COMMENT_INSERT = 50
-DEFAULT_DAILY_QUOTA_BUDGET = 9000  # margen de seguridad bajo las 10.000 de por defecto
+# Deliberadamente MUY alto: `quota_used` es un contador local que empieza
+# de cero en cada llamada a upload_lp_schedule() (no recuerda cuánto se
+# gastó en una llamada anterior el mismo día), así que un tope bajo aquí
+# no refleja de verdad cuánta cuota diaria queda en la cuenta de Google
+# -- solo sirve para no encadenar de más dentro de UNA misma llamada.
+# El límite real lo aplica Google, y ya está cubierto: en cuanto rechaza
+# de verdad por cuota agotada (_is_quota_error), se para sola sin error
+# y sin duplicar nada, para seguir en la siguiente llamada/día.
+DEFAULT_DAILY_QUOTA_BUDGET = 1_000_000
 
 
 def _is_quota_error(exc) -> bool:
@@ -277,12 +286,13 @@ def upload_lp_schedule(
       sobre los Shorts, para no multiplicar las llamadas a la API.
 
     Un LP entero (~550 vídeos) no cabe en la cuota diaria gratuita de la
-    API de YouTube (10.000 unidades/día, ~5-6 vídeos), así que esta
-    función sube los que le caben en `daily_quota_budget` y se para sola
-    —sin error, sin perder el sitio— en cuanto se acerca al límite (o en
-    cuanto Google la rechaza de verdad por cuota, como red de seguridad
-    extra). Basta con volver a llamarla (relanzando esta fase desde
-    `procesar_lp.py`) en días sucesivos hasta terminar.
+    API de YouTube, así que esta función sube lo que puede y se para
+    sola —sin error, sin perder el sitio— en cuanto Google la rechaza de
+    verdad por cuota agotada (no hay forma fiable de calcular de
+    antemano cuánta cuota queda de verdad en la cuenta, así que se deja
+    que sea la propia respuesta de Google la que lo diga). Basta con
+    volver a llamarla (relanzando `continuar_subida_youtube.py`, a mano
+    o vía la Tarea Programada) en días sucesivos hasta terminar.
     """
     from src.youtube_uploader import upload_video, update_video_description
 

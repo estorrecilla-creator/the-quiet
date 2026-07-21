@@ -519,11 +519,13 @@ def _run_youtube_phase(
         print(f"  [{item['publish_at_local']}]  {Path(item['video_path']).name}")
 
     print(
-        "\n(Aviso: la cuota gratuita de la API de YouTube solo da para unos 5-6 "
-        "vídeos subidos al día, muy por debajo de los que tiene un LP entero — "
-        "esto puede tardar varios días/meses en terminar. Una vez confirmes, "
-        "queda todo listo para que el resto se suba SOLO cada día con la Tarea "
-        "Programada de Windows — no hace falta que relances nada a mano.)"
+        "\n(Aviso: la cuota gratuita de la API de YouTube no da para subir un LP "
+        "entero de una vez — el programa sube lo que puede cada vez y se para "
+        "solo, sin error, en cuanto Google la rechaza de verdad por cuota "
+        "agotada. Esto puede tardar varios días/meses en terminar. Una vez "
+        "confirmes, queda todo listo para que el resto se suba SOLO cada día "
+        "con la Tarea Programada de Windows — no hace falta que relances nada "
+        "a mano.)"
     )
     confirmar = st.ask("\n¿Subir y programar TODO esto en YouTube ahora? [s/N]", "n").lower()
     save_path = lp_dir / "calendario_youtube.json"
