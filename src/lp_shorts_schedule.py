@@ -238,6 +238,16 @@ DEFAULT_DAILY_QUOTA_BUDGET = 1_000_000
 
 
 def _is_quota_error(exc) -> bool:
+    """
+    Detecta si Google ha rechazado la subida por haber llegado a un
+    límite diario de verdad — hay DOS tipos distintos, y hay que
+    reconocer ambos para poder parar sin más en vez de reventar:
+    1. Cuota de la API (unidades/día, "quotaExceeded"/"dailyLimitExceeded").
+    2. Límite de VÍDEOS SUBIDOS por el canal en 24h ("uploadLimitExceeded"
+       — típico de canales nuevos/sin verificar, nada que ver con la
+       cuota de la API; reproducido de verdad: "The user has exceeded
+       the number of videos they may upload.").
+    """
     from googleapiclient.errors import HttpError
     if not isinstance(exc, HttpError):
         return False
@@ -247,7 +257,7 @@ def _is_quota_error(exc) -> bool:
     except (AttributeError, IndexError, TypeError):
         pass
     text = f"{reason} {exc}".lower()
-    return "quota" in text or "dailylimit" in text
+    return "quota" in text or "dailylimit" in text or "uploadlimit" in text
 
 
 def upload_lp_schedule(
@@ -344,7 +354,7 @@ def upload_lp_schedule(
             )
         except Exception as e:
             if _is_quota_error(e):
-                print("   Cuota de YouTube agotada de verdad (Google lo ha rechazado) — paro aquí por hoy.")
+                print(f"   Límite diario de YouTube alcanzado de verdad ({e}) — paro aquí por hoy.")
                 quota_exhausted = True
                 return
             raise
