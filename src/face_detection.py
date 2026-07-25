@@ -38,14 +38,23 @@ def _get_cascades():
     return _cascades
 
 
-def frame_has_prominent_face(image, min_face_area_fraction: float = 0.03) -> bool:
+def frame_has_prominent_face(
+    image, min_face_area_fraction: float = 0.03,
+    scale_factor: float = 1.1, min_neighbors: int = 5,
+) -> bool:
     """
     `image`: array RGB (alto x ancho x 3, uint8). Devuelve True si
     detecta una cara (de frente o de perfil) que ocupa al menos
     `min_face_area_fraction` del fotograma (una cara pequeña de fondo no
     cuenta; una cara de primer plano/entrevista/retrato sí). También se
     prueba la imagen reflejada horizontalmente, porque el cascade de
-    perfil de OpenCV solo está entrenado para un lado de la cara."""
+    perfil de OpenCV solo está entrenado para un lado de la cara.
+
+    `scale_factor`/`min_neighbors`: sensibilidad de la cascada de Haar --
+    valores más bajos detectan caras más pequeñas/parciales a costa de
+    más falsos positivos. Los valores por defecto son los "normales" de
+    OpenCV; quien necesite tolerancia cero con gente (ej. el filtro de
+    contenido de la NASA) debe pasar valores más sensibles."""
     try:
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         h, w = gray.shape[:2]
@@ -63,11 +72,11 @@ def frame_has_prominent_face(image, min_face_area_fraction: float = 0.03) -> boo
         # minSize son PÍXELES, no una fracción -- si no se recalcula tras
         # reescalar, una cara que sí cumple min_face_area_fraction puede
         # quedar por debajo del mínimo en píxeles y no detectarse nunca.
-        min_face_side = max(20, int((min_face_area_fraction * rh * rw) ** 0.5))
+        min_face_side = max(16, int((min_face_area_fraction * rh * rw) ** 0.5))
         for candidate in (gray, cv2.flip(gray, 1)):
             for cascade in _get_cascades():
                 faces = cascade.detectMultiScale(
-                    candidate, scaleFactor=1.1, minNeighbors=5,
+                    candidate, scaleFactor=scale_factor, minNeighbors=min_neighbors,
                     minSize=(min_face_side, min_face_side),
                 )
                 for (_x, _y, fw, fh) in faces:

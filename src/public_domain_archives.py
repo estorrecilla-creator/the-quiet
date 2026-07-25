@@ -187,6 +187,19 @@ def _mentions_people_content(data: dict) -> bool:
     return any(term in text for term in _PEOPLE_TEXT_BLOCKLIST)
 
 
+# tolerancia CERO con personas (a petición explícita de Salva: "TODOS los
+# vídeos y fotos que tengan personas", no solo las que salen en primer
+# plano): el umbral de TAMAÑO de cara baja mucho respecto al de
+# film_editor.py (0.03, pensado solo para clasificar "primer plano" de
+# película) para que cuente una persona aunque salga pequeña en el
+# encuadre. OJO: scale_factor/min_neighbors se dejan en los valores
+# normales de OpenCV (más sensibles disparan falsos positivos reales --
+# probado: con scale_factor=1.05/min_neighbors<=4 varias fotos de la Gran
+# Mancha Roja de Júpiter, solo nubes, se marcaban como "persona" por el
+# patrón de las turbulencias).
+_PEOPLE_ZERO_TOLERANCE = {"min_face_area_fraction": 0.006, "scale_factor": 1.1, "min_neighbors": 5}
+
+
 def _image_shows_people(image_path: str) -> bool:
     import numpy as np
     from PIL import Image
@@ -196,17 +209,16 @@ def _image_shows_people(image_path: str) -> bool:
         img = np.array(Image.open(image_path).convert("RGB"))
     except Exception:
         return False
-    return frame_has_prominent_face(img)
+    return frame_has_prominent_face(img, **_PEOPLE_ZERO_TOLERANCE)
 
 
 def _video_shows_people(video_path: str, n_samples: int = 14) -> bool:
     """Segunda línea de defensa (además del filtro de texto): muestrea
     varios fotogramas repartidos por todo el vídeo y comprueba si
-    aparecen caras humanas prominentes en una parte relevante de ellos --
-    una entrevista o un plano de gente en la Tierra tiene cara en
-    prácticamente todos los fotogramas, así que basta con un umbral bajo
-    para detectarlo sin marcar por error una persona diminuta de fondo en
-    un único fotograma suelto.
+    aparece una persona en CUALQUIERA de ellos -- tolerancia cero, no
+    hace falta que salga en muchos fotogramas seguidos para descartar el
+    vídeo entero (a petición explícita: "excluir TODOS los vídeos y fotos
+    que tengan personas", no solo los que la muestran de forma sostenida).
 
     Aviso honesto: bastante vídeo "en bruto" de la NASA (sobre todo el
     de entrevistas/ruedas de prensa) son grabaciones muy largas del feed
@@ -255,12 +267,13 @@ def _video_shows_people(video_path: str, n_samples: int = 14) -> bool:
                 img = np.array(Image.open(frame_path).convert("RGB"))
             except Exception:
                 continue
-            if frame_has_prominent_face(img):
+            if frame_has_prominent_face(img, **_PEOPLE_ZERO_TOLERANCE):
                 hits += 1
+                break  # tolerancia cero: con que aparezca en UN fotograma basta para descartar
 
     if checked == 0:
         return False
-    return (hits / checked) >= 0.2
+    return hits > 0
 
 
 _NASA_QUERY_SYSTEM = """Eres un asistente que convierte la descripción de un tema musical
@@ -291,6 +304,51 @@ quita nombres de misión concretos o adjetivos muy específicos, quédate con
 el objeto astronómico en sí (ej. si "Apollo Moon surface close-up" no dio
 nada, prueba "Moon surface" o "Lunar surface NASA"). Responde ÚNICAMENTE
 con JSON: {"query": "..."}"""
+
+
+_NASA_QUERIES_SYSTEM = """Eres un asistente que convierte la descripción de un tema musical en
+VARIOS términos de búsqueda distintos en INGLÉS para la biblioteca de
+imágenes/vídeo de la NASA (images.nasa.gov). Cada término debe ser
+concreto (objeto astronómico + característica visual, ej. "Saturn rings
+Cassini", "Andromeda galaxy Hubble", "Jupiter Great Red Spot"), de 2 a 5
+palabras, sin explicaciones -- y cada uno debe apuntar a un ÁNGULO
+DISTINTO del mismo tema (ej. para un tema sobre la Luna: una vez el
+objeto en sí de cerca, otra vez una vista más amplia/orbital, otra vez un
+detalle concreto de su superficie...), no la misma idea repetida con
+sinónimos. Cuantos más términos variados, más fácil encontrar contenido
+real que cumpla los filtros de calidad, así que cubre bien el abanico de
+posibles imágenes/vídeos del mismo objeto o escena.
+
+Importante sobre VÍDEO (no aplica a fotografía): el vídeo tiene que ser
+HD de verdad, y el vídeo genuinamente HD de la NASA es casi todo de
+misiones digitales modernas (Cassini, Juno, Perseverance/Curiosity, LRO,
+Hubble, JWST, cámaras de la ISS, SDO, Voyager reprocesado...) -- el
+material de archivo de antes de los 2000 (Apolo, transbordador clásico)
+casi nunca tiene una versión de vídeo en HD, por mucho que el propio
+suceso sea histórico. Así que, aunque el tema hable de algo de esa época,
+formula las búsquedas apuntando al objeto/lugar en sí (ej. "Moon surface"
+en vez de "Apollo Moon landing"), no a la misión histórica concreta -- así
+puede encontrar imagen MODERNA en alta resolución del mismo objeto.
+
+Responde ÚNICAMENTE con JSON: {"queries": ["...", "...", "...", "...", "..."]}"""
+
+
+def generate_nasa_queries(track_title: str, context: str, n: int = 5) -> list:
+    """
+    Convierte el título/contexto de un tema (en español, pensado para
+    humanos) en VARIOS términos de búsqueda distintos en inglés contra la
+    biblioteca de la NASA -- más términos = más superficie de búsqueda,
+    así que una sola consulta estrecha (ej. una misión histórica
+    concreta) no deja sin material a todo el tema. Se buscan todos en
+    orden hasta reunir suficiente imagen/vídeo válido; no hace falta
+    gastar los 5 si los primeros ya dan de sobra.
+    """
+    from src.anthropic_utils import call_claude_json
+
+    user = f"Título del tema: {track_title}\nContexto: {context}\nNúmero de términos: {n}"
+    result = call_claude_json(_NASA_QUERIES_SYSTEM, user, max_tokens=400, model="claude-sonnet-5")
+    queries = result.get("queries") or []
+    return queries or [track_title]
 
 
 def generate_nasa_query(track_title: str, context: str) -> str:

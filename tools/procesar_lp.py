@@ -883,42 +883,62 @@ def main():
             video_clips = []
             nasa_track_film_edit = None
             if nasa_ctx:
-                from src.public_domain_archives import generate_nasa_query, generate_nasa_query_fallback, gather_nasa_assets
+                from src.public_domain_archives import generate_nasa_queries, generate_nasa_query_fallback, gather_nasa_assets
                 from src.film_editor import tag_scenes_multi_source
 
                 nasa_out_dir = lp_dir / "NASA_ASSETS" / _safe_filename(track["title"]).replace(" ", "_")
                 nasa_assets = []
-                nasa_query = generate_nasa_query(track["title"], track["context"])
-                # con los filtros de calidad/contenido (HD real, nada de
-                # gente, nada de feeds larguísimos) algunas búsquedas
-                # concretas se quedan sin ningún vídeo válido -- sobre todo
-                # las ligadas a una misión histórica antigua (ej. "Apollo"),
-                # que casi nunca tiene vídeo en HD de verdad. Antes de
-                # rendirse, se prueba con una búsqueda más amplia/genérica
-                # sobre el mismo objeto un par de veces más.
-                for attempt in range(3):
-                    print(f"   Búsqueda NASA para este tema (intento {attempt + 1}/3): \"{nasa_query}\"")
-                    have_images = sum(1 for c in nasa_assets if Path(c).suffix.lower() not in VIDEO_EXTENSIONS)
-                    have_videos = sum(1 for c in nasa_assets if Path(c).suffix.lower() in VIDEO_EXTENSIONS)
+
+                def _have_counts():
+                    imgs = sum(1 for c in nasa_assets if Path(c).suffix.lower() not in VIDEO_EXTENSIONS)
+                    vids = sum(1 for c in nasa_assets if Path(c).suffix.lower() in VIDEO_EXTENSIONS)
+                    return imgs, vids
+
+                # con los filtros de calidad/contenido (HD real, tolerancia
+                # cero con personas, nada de feeds larguísimos) una sola
+                # búsqueda concreta se queda corta enseguida -- se generan
+                # varios términos distintos del mismo tema (ángulos/objetos
+                # distintos, no sinónimos) y se prueban todos, acumulando
+                # resultados, hasta reunir suficiente imagen/vídeo válido
+                # sin gastar más términos de los necesarios.
+                nasa_queries = generate_nasa_queries(track["title"], track["context"], n=5)
+                print(f"   Términos de búsqueda NASA para este tema: {nasa_queries}")
+                last_query = None
+                for nasa_query in nasa_queries:
+                    have_images, have_videos = _have_counts()
+                    if have_images >= 3 and have_videos >= NASA_VIDEOS_PER_TRACK:
+                        break
+                    print(f"   Búsqueda NASA: \"{nasa_query}\"")
+                    last_query = nasa_query
                     new_assets = gather_nasa_assets(
                         nasa_query, str(nasa_out_dir), log_path=str(lp_dir / "nasa_audit_log.json"),
                         n_images=max(3 - have_images, 0), n_videos=max(NASA_VIDEOS_PER_TRACK - have_videos, 0),
                         exclude_urls=nasa_ctx["exclude_urls"],
                     )
                     nasa_assets.extend(new_assets)
-                    have_videos = sum(1 for c in nasa_assets if Path(c).suffix.lower() in VIDEO_EXTENSIONS)
-                    if have_videos > 0 or attempt == 2:
-                        break
-                    print(f"   Sin vídeo HD válido para \"{nasa_query}\" — probando una búsqueda más amplia...")
-                    nasa_query = generate_nasa_query_fallback(track["title"], track["context"], nasa_query)
+
+                # si tras probar TODOS los términos generados sigue sin
+                # haber ni un solo vídeo válido, se pide una última
+                # alternativa más amplia/genérica antes de rendirse del todo.
+                _, have_videos = _have_counts()
+                if have_videos == 0 and last_query:
+                    fallback_query = generate_nasa_query_fallback(track["title"], track["context"], last_query)
+                    print(f"   Sin vídeo HD válido tras {len(nasa_queries)} búsquedas — probando una alternativa más amplia: \"{fallback_query}\"")
+                    have_images, have_videos = _have_counts()
+                    new_assets = gather_nasa_assets(
+                        fallback_query, str(nasa_out_dir), log_path=str(lp_dir / "nasa_audit_log.json"),
+                        n_images=max(3 - have_images, 0), n_videos=NASA_VIDEOS_PER_TRACK,
+                        exclude_urls=nasa_ctx["exclude_urls"],
+                    )
+                    nasa_assets.extend(new_assets)
 
                 if not nasa_assets:
-                    raise RuntimeError(f"la NASA no devolvió ningún resultado válido para el tema \"{track['title']}\" tras varios intentos de búsqueda")
+                    raise RuntimeError(f"la NASA no devolvió ningún resultado válido para el tema \"{track['title']}\" tras varios términos de búsqueda")
                 print(f"   {len(nasa_assets)} archivos de la NASA descargados para este tema.")
                 nasa_images = [c for c in nasa_assets if Path(c).suffix.lower() not in VIDEO_EXTENSIONS]
                 video_clips = [c for c in nasa_assets if Path(c).suffix.lower() in VIDEO_EXTENSIONS]
                 if not video_clips:
-                    raise RuntimeError(f"la NASA no devolvió ningún vídeo válido para el tema \"{track['title']}\" tras varios intentos de búsqueda")
+                    raise RuntimeError(f"la NASA no devolvió ningún vídeo válido para el tema \"{track['title']}\" tras varios términos de búsqueda")
                 # las imágenes NASA del tema se usan solo como miniatura de
                 # YouTube (si no hay ya una miniatura de plantilla propia) —
                 # el vídeo principal y los Shorts son montaje 100% de vídeo
