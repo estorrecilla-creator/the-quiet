@@ -364,10 +364,27 @@ def search_nasa_images(
 _VIDEO_QUALITY_PREFERENCE = ("medium", "small", "orig", "large", "mobile", "preview")
 
 
+def _probe_remote_duration(url: str, timeout: int = 20):
+    """Duración en segundos de un vídeo remoto sin descargarlo entero
+    (ffprobe lee solo la cabecera/metadatos vía rango HTTP). Devuelve
+    None si no se puede determinar -- en ese caso, mejor dejar pasar el
+    candidato que descartarlo por un fallo de sonda."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", url],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        return float(result.stdout.strip())
+    except (subprocess.SubprocessError, ValueError):
+        return None
+
+
 def search_nasa_videos(
     query: str,
     limit: int = 10,
     exclude_urls: set = None,
+    max_duration_seconds: float = 300,
 ):
     """
     Busca vídeo real (no imágenes) en la biblioteca de la NASA. Cada
@@ -376,6 +393,16 @@ def search_nasa_videos(
     sacar el .mp4 real -- por eso es más lento que la búsqueda de
     imágenes y se limita a los primeros candidatos sin copyright. Misma
     ficha de control que search_nasa_images/search_wikimedia_commons.
+
+    `max_duration_seconds`: descarta clips más largos que esto SIN
+    descargarlos (ffprobe puede leer la duración directamente de la URL
+    remota en ~1s, gracias al soporte de rangos HTTP del CDN de la NASA,
+    sin traerse el archivo entero). Interesa por dos motivos: bastante
+    vídeo "en bruto" de la NASA son grabaciones larguísimas del feed de
+    satélite completo (de 20 minutos a más de una hora), que además es
+    justo el tipo de material con más probabilidad de incluir entrevistas
+    o gente en la Tierra; y un clip corto ya editado encaja mejor como
+    material de origen para un montaje musical que un feed en crudo.
     """
     exclude_urls = exclude_urls or set()
     resp = requests.get(
@@ -412,6 +439,10 @@ def search_nasa_videos(
                 download_url = match.replace("http://", "https://", 1)
                 break
         if not download_url or download_url in exclude_urls:
+            continue
+
+        duration = _probe_remote_duration(download_url)
+        if duration is not None and duration > max_duration_seconds:
             continue
 
         results.append({
