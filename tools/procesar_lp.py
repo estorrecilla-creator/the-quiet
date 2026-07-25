@@ -901,6 +901,20 @@ def main():
                 if nasa_images and not thumbnails.get(track["number"]):
                     thumbnails[track["number"]] = nasa_images[0]
                     print(f"   Miniatura (imagen NASA): {nasa_images[0]}")
+
+                # bastante vídeo real de archivo de la NASA lleva fecha/
+                # telemetría/marca de la misión quemada en la propia imagen
+                # -- se detecta y se tapa (delogo) ANTES de montar, para que
+                # no se cuele en el vídeo musical final.
+                from src.video_overlay_removal import clean_video_overlays
+                cleaned_clips = []
+                for clip in video_clips:
+                    cleaned = clean_video_overlays(clip)
+                    if cleaned != clip:
+                        print(f"   Overlay quemado detectado y tapado en {Path(clip).name}.")
+                    cleaned_clips.append(cleaned)
+                video_clips = cleaned_clips
+
                 print(f"   Detectando/clasificando planos de {len(video_clips)} vídeos de la NASA de este tema...")
                 nasa_tagged_scenes = tag_scenes_multi_source(video_clips)
                 nasa_track_film_edit = {
