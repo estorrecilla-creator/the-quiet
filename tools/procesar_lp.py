@@ -746,8 +746,19 @@ def main():
             "clips",
         ).lower()
 
+    nasa_ctx = None
+    usar_nasa = st.ask(
+        "¿Usar imágenes y vídeo real de la NASA (dominio público) como portada "
+        "de vídeo principal y Shorts de todo este LP, en vez de clips de stock? "
+        "[s/N]",
+        "n",
+    ).lower()
+    if usar_nasa.startswith("s"):
+        nasa_ctx = {"exclude_urls": set()}
+        print("-> Se generará una búsqueda distinta para la NASA por cada tema, a partir de su título/contexto.")
+
     film_edit_ctx = None
-    film_edit_path = st.ask_path(
+    film_edit_path = None if nasa_ctx else st.ask_path(
         "¿Usar cortes de una película (de dominio público, ya verificada) para "
         "el vídeo principal y los Shorts de todo este LP, en vez de clips de "
         "stock/miniatura/reloj? Ruta al archivo de la película (Enter para no "
@@ -843,7 +854,21 @@ def main():
 
             cover = None
             video_clips = []
-            if not film_edit_ctx:
+            if nasa_ctx:
+                from src.public_domain_archives import generate_nasa_query, gather_nasa_assets
+                nasa_query = generate_nasa_query(track["title"], track["context"])
+                print(f"   Búsqueda NASA para este tema: \"{nasa_query}\"")
+                nasa_out_dir = lp_dir / "NASA_ASSETS" / _safe_filename(track["title"]).replace(" ", "_")
+                nasa_assets = gather_nasa_assets(
+                    nasa_query, str(nasa_out_dir), log_path=str(lp_dir / "nasa_audit_log.json"),
+                    n_images=3, n_videos=2, exclude_urls=nasa_ctx["exclude_urls"],
+                )
+                if not nasa_assets:
+                    raise RuntimeError(f"la NASA no devolvió ningún resultado válido para \"{nasa_query}\"")
+                print(f"   {len(nasa_assets)} archivos de la NASA descargados para este tema.")
+                cover = nasa_assets
+                video_clips = [c for c in nasa_assets if Path(c).suffix.lower() in VIDEO_EXTENSIONS]
+            elif not film_edit_ctx:
                 cover = _resolve_cover_unattended(
                     artist, track_title, genre, track["context"], have_openai, have_stock, used_video_urls,
                 )
@@ -863,7 +888,15 @@ def main():
 
             use_static_shorts = shorts_visual_mode.startswith("m") and thumbnails.get(track["number"])
             use_rotating_shorts = shorts_visual_mode.startswith("r") and thumbnails.get(track["number"])
-            if film_edit_ctx:
+            if nasa_ctx:
+                # los Shorts de este tema reutilizan los mismos vídeos de la
+                # NASA ya descargados para su vídeo principal, igual que el
+                # modo "clips" -- no se pide nada nuevo a la API de la NASA.
+                shorts_n = FALLBACK_N_SHORTS
+                shorts_clips_arg = video_clips if video_clips else None
+                shorts_cover_override_arg = None
+                print(f"   Shorts con vídeo real de la NASA (hasta {shorts_n}).")
+            elif film_edit_ctx:
                 # igual que el modo "clips" (15 x 3): con el reparto de
                 # planos por tema, más Shorts ya no gasta más planos
                 # frescos del álbum, solo reutiliza los del propio tema.
