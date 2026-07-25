@@ -71,6 +71,12 @@ FALLBACK_N_SHORTS = 3   # solo si no hay ningún clip de vídeo (portada de imag
 # algoritmo de YouTube, puede leerse como contenido repetido/spam).
 SHORTS_STATIC_IMAGE_TOP_N = 8
 PROGRESS_FILENAME = "progreso_generacion.json"
+# con solo 1-2 vídeos de la NASA por tema el montaje se queda sin planos
+# frescos enseguida y empieza a repetir "segundos sueltos" del mismo clip
+# una y otra vez; con 5 vídeos (normalmente de varios minutos cada uno,
+# con bastantes cambios de plano dentro) hay pool de sobra para el vídeo
+# principal + los 45 Shorts del propio tema sin notarse la repetición.
+NASA_VIDEOS_PER_TRACK = 5
 
 
 def _load_generation_progress(lp_dir):
@@ -748,8 +754,11 @@ def main():
 
     nasa_ctx = None
     usar_nasa = st.ask(
-        "¿Usar imágenes y vídeo real de la NASA (dominio público) como portada "
-        "de vídeo principal y Shorts de todo este LP, en vez de clips de stock? "
+        f"¿Usar vídeo real de la NASA (dominio público) como fuente del vídeo "
+        f"principal y los Shorts de todo este LP, en vez de clips de stock? Se "
+        f"descargan {NASA_VIDEOS_PER_TRACK} vídeos por tema y se montan con "
+        "cortes reales sincronizados a la energía del audio (como con una "
+        "película), y una imagen de la NASA se usa como miniatura de YouTube. "
         "[s/N]",
         "n",
     ).lower()
@@ -854,20 +863,36 @@ def main():
 
             cover = None
             video_clips = []
+            nasa_track_film_edit = None
             if nasa_ctx:
                 from src.public_domain_archives import generate_nasa_query, gather_nasa_assets
+                from src.film_editor import tag_scenes_multi_source
                 nasa_query = generate_nasa_query(track["title"], track["context"])
                 print(f"   Búsqueda NASA para este tema: \"{nasa_query}\"")
                 nasa_out_dir = lp_dir / "NASA_ASSETS" / _safe_filename(track["title"]).replace(" ", "_")
                 nasa_assets = gather_nasa_assets(
                     nasa_query, str(nasa_out_dir), log_path=str(lp_dir / "nasa_audit_log.json"),
-                    n_images=3, n_videos=2, exclude_urls=nasa_ctx["exclude_urls"],
+                    n_images=3, n_videos=NASA_VIDEOS_PER_TRACK, exclude_urls=nasa_ctx["exclude_urls"],
                 )
                 if not nasa_assets:
                     raise RuntimeError(f"la NASA no devolvió ningún resultado válido para \"{nasa_query}\"")
                 print(f"   {len(nasa_assets)} archivos de la NASA descargados para este tema.")
-                cover = nasa_assets
+                nasa_images = [c for c in nasa_assets if Path(c).suffix.lower() not in VIDEO_EXTENSIONS]
                 video_clips = [c for c in nasa_assets if Path(c).suffix.lower() in VIDEO_EXTENSIONS]
+                if not video_clips:
+                    raise RuntimeError(f"la NASA no devolvió ningún vídeo para \"{nasa_query}\" (solo imágenes)")
+                # las imágenes NASA del tema se usan solo como miniatura de
+                # YouTube (si no hay ya una miniatura de plantilla propia) —
+                # el vídeo principal y los Shorts son montaje 100% de vídeo
+                # real de la NASA, sin planos de imagen fija mezclados dentro.
+                if nasa_images and not thumbnails.get(track["number"]):
+                    thumbnails[track["number"]] = nasa_images[0]
+                    print(f"   Miniatura (imagen NASA): {nasa_images[0]}")
+                print(f"   Detectando/clasificando planos de {len(video_clips)} vídeos de la NASA de este tema...")
+                nasa_tagged_scenes = tag_scenes_multi_source(video_clips)
+                nasa_track_film_edit = {
+                    "film_path": video_clips, "tagged_scenes": nasa_tagged_scenes, "exclude_ranges": set(),
+                }
             elif not film_edit_ctx:
                 cover = _resolve_cover_unattended(
                     artist, track_title, genre, track["context"], have_openai, have_stock, used_video_urls,
@@ -889,13 +914,14 @@ def main():
             use_static_shorts = shorts_visual_mode.startswith("m") and thumbnails.get(track["number"])
             use_rotating_shorts = shorts_visual_mode.startswith("r") and thumbnails.get(track["number"])
             if nasa_ctx:
-                # los Shorts de este tema reutilizan los mismos vídeos de la
-                # NASA ya descargados para su vídeo principal, igual que el
-                # modo "clips" -- no se pide nada nuevo a la API de la NASA.
-                shorts_n = FALLBACK_N_SHORTS
-                shorts_clips_arg = video_clips if video_clips else None
+                # igual que el modo "película": los Shorts se montan también
+                # con cortes reales de los vídeos de la NASA de este tema
+                # (reutilizando el mismo pool de planos ya usados en su
+                # vídeo principal), no con clips sueltos completos.
+                shorts_n = N_CLIPS_PER_TRACK * SHORTS_PER_CLIP
+                shorts_clips_arg = None
                 shorts_cover_override_arg = None
-                print(f"   Shorts con vídeo real de la NASA (hasta {shorts_n}).")
+                print(f"   Shorts y vídeo principal montados con cortes de vídeo real de la NASA (hasta {shorts_n} Shorts).")
             elif film_edit_ctx:
                 # igual que el modo "clips" (15 x 3): con el reparto de
                 # planos por tema, más Shorts ya no gasta más planos
@@ -935,7 +961,7 @@ def main():
                     shorts_per_clip=SHORTS_PER_CLIP,
                     watermark_logo_light_path=watermark_logo_light,
                     watermark_logo_dark_path=watermark_logo_dark,
-                    film_edit=film_edit_ctx,
+                    film_edit=nasa_track_film_edit or film_edit_ctx,
                 )
             finally:
                 if lyrics_path:
