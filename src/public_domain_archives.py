@@ -233,6 +233,79 @@ def search_nasa_images(
     return results
 
 
+# orden de preferencia de calidad para vídeo: "medium" es de sobra para
+# un fondo de vídeo musical (se reescala igualmente en ffmpeg) y pesa
+# mucho menos que "large"/"orig" -- de hasta 15x menos en pruebas reales.
+_VIDEO_QUALITY_PREFERENCE = ("medium", "small", "orig", "large", "mobile", "preview")
+
+
+def search_nasa_videos(
+    query: str,
+    limit: int = 10,
+    exclude_urls: set = None,
+):
+    """
+    Busca vídeo real (no imágenes) en la biblioteca de la NASA. Cada
+    resultado de la búsqueda solo trae miniaturas, así que hay que pedir
+    el manifiesto de archivos (`item["href"]`) de cada candidato para
+    sacar el .mp4 real -- por eso es más lento que la búsqueda de
+    imágenes y se limita a los primeros candidatos sin copyright. Misma
+    ficha de control que search_nasa_images/search_wikimedia_commons.
+    """
+    exclude_urls = exclude_urls or set()
+    resp = requests.get(
+        NASA_API, params={"q": query, "media_type": "video"},
+        headers={"User-Agent": USER_AGENT}, timeout=30,
+    )
+    resp.raise_for_status()
+    items = resp.json().get("collection", {}).get("items", [])
+
+    results = []
+    for item in items:
+        if len(results) >= limit:
+            break
+        if not item.get("data") or not item.get("href"):
+            continue
+        data = item["data"][0]
+        if data.get("copyright"):
+            continue
+
+        try:
+            manifest_resp = requests.get(item["href"], headers={"User-Agent": USER_AGENT}, timeout=30)
+            manifest_resp.raise_for_status()
+            file_urls = manifest_resp.json()
+        except (requests.exceptions.RequestException, ValueError):
+            continue
+
+        mp4_urls = [u for u in file_urls if u.lower().endswith(".mp4")]
+        download_url = None
+        for tier in _VIDEO_QUALITY_PREFERENCE:
+            match = next((u for u in mp4_urls if u.lower().endswith(f"~{tier}.mp4")), None)
+            if match:
+                download_url = match.replace("http://", "https://", 1)
+                break
+        if not download_url or download_url in exclude_urls:
+            continue
+
+        results.append({
+            "id": f"NASA_{data.get('nasa_id')}",
+            "title": data.get("title", ""),
+            "author": data.get("secondary_creator") or f"NASA/{data.get('center', '')}".rstrip("/"),
+            "date": data.get("date_created", ""),
+            "institution": f"NASA{(' — ' + data['center']) if data.get('center') else ''}",
+            "source_url": f"https://images.nasa.gov/details/{data.get('nasa_id')}",
+            "license": "Public Domain (NASA)",
+            "license_raw": "U.S. Government Work — no copyright field present",
+            "license_url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+            "commercial_ok": True,
+            "derivatives_ok": True,
+            "download_url": download_url,
+            "width": None,
+            "height": None,
+        })
+    return results
+
+
 def download_candidate(candidate: dict, out_dir: str, log_path: str = None) -> str:
     """
     Descarga `candidate["download_url"]` a `out_dir` y, si se pasa
