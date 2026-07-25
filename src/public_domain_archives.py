@@ -263,6 +263,36 @@ def _video_shows_people(video_path: str, n_samples: int = 14) -> bool:
     return (hits / checked) >= 0.2
 
 
+_NASA_QUERY_SYSTEM = """Eres un asistente que convierte la descripción de un tema musical
+en un término de búsqueda corto y efectivo en INGLÉS para la biblioteca de
+imágenes/vídeo de la NASA (images.nasa.gov). El término debe ser concreto
+(objeto astronómico + característica visual, ej. "Saturn rings Cassini",
+"Andromeda galaxy Hubble", "Jupiter Great Red Spot"), de 2 a 5 palabras,
+sin explicaciones.
+
+Importante sobre VÍDEO (no aplica a fotografía): el vídeo tiene que ser
+HD de verdad, y el vídeo genuinamente HD de la NASA es casi todo de
+misiones digitales modernas (Cassini, Juno, Perseverance/Curiosity, LRO,
+Hubble, JWST, cámaras de la ISS, SDO, Voyager reprocesado...) -- el
+material de archivo de antes de los 2000 (Apolo, transbordador clásico)
+casi nunca tiene una versión de vídeo en HD, por mucho que el propio
+suceso sea histórico. Así que, aunque el tema hable de algo de esa época,
+formula la búsqueda apuntando al objeto/lugar en sí (ej. "Moon surface"
+en vez de "Apollo Moon landing"), no a la misión histórica concreta -- así
+puede encontrar imagen MODERNA en alta resolución del mismo objeto.
+
+Responde ÚNICAMENTE con JSON: {"query": "..."}"""
+
+_NASA_QUERY_FALLBACK_SYSTEM = """Eres un asistente que ayuda a encontrar vídeo/imagen de la NASA en
+alta resolución. Una búsqueda anterior no dio ningún resultado válido en
+images.nasa.gov. Genera una alternativa MÁS AMPLIA/GENÉRICA en INGLÉS (2-4
+palabras) sobre el mismo tema, evitando el término exacto que ya falló --
+quita nombres de misión concretos o adjetivos muy específicos, quédate con
+el objeto astronómico en sí (ej. si "Apollo Moon surface close-up" no dio
+nada, prueba "Moon surface" o "Lunar surface NASA"). Responde ÚNICAMENTE
+con JSON: {"query": "..."}"""
+
+
 def generate_nasa_query(track_title: str, context: str) -> str:
     """
     Convierte el título/contexto de un tema (en español, pensado para
@@ -273,17 +303,22 @@ def generate_nasa_query(track_title: str, context: str) -> str:
     """
     from src.anthropic_utils import call_claude_json
 
-    system = (
-        "Eres un asistente que convierte la descripción de un tema musical "
-        "en un término de búsqueda corto y efectivo en INGLÉS para la "
-        "biblioteca de imágenes/vídeo de la NASA (images.nasa.gov). "
-        "El término debe ser concreto (objeto astronómico + característica "
-        "visual, ej. 'Saturn rings Cassini', 'Andromeda galaxy Hubble', "
-        "'Jupiter Great Red Spot'), de 2 a 5 palabras, sin explicaciones. "
-        "Responde ÚNICAMENTE con JSON: {\"query\": \"...\"}"
-    )
     user = f"Título del tema: {track_title}\nContexto: {context}"
-    result = call_claude_json(system, user, max_tokens=200, model="claude-sonnet-5")
+    result = call_claude_json(_NASA_QUERY_SYSTEM, user, max_tokens=200, model="claude-sonnet-5")
+    return result.get("query", track_title)
+
+
+def generate_nasa_query_fallback(track_title: str, context: str, failed_query: str) -> str:
+    """Segundo intento cuando `failed_query` no dio ningún resultado
+    válido -- pide una alternativa más amplia/genérica en vez de rendirse
+    directamente."""
+    from src.anthropic_utils import call_claude_json
+
+    user = (
+        f"Título del tema: {track_title}\nContexto: {context}\n"
+        f"Búsqueda que ya falló (no dio resultados): {failed_query}"
+    )
+    result = call_claude_json(_NASA_QUERY_FALLBACK_SYSTEM, user, max_tokens=200, model="claude-sonnet-5")
     return result.get("query", track_title)
 
 
@@ -399,7 +434,7 @@ def search_nasa_videos(
     query: str,
     limit: int = 10,
     exclude_urls: set = None,
-    max_duration_seconds: float = 300,
+    max_duration_seconds: float = 600,
     min_short_side: int = 720,
 ):
     """
