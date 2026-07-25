@@ -364,20 +364,35 @@ def search_nasa_images(
 _VIDEO_QUALITY_PREFERENCE = ("medium", "small", "orig", "large", "mobile", "preview")
 
 
-def _probe_remote_duration(url: str, timeout: int = 20):
-    """Duración en segundos de un vídeo remoto sin descargarlo entero
-    (ffprobe lee solo la cabecera/metadatos vía rango HTTP). Devuelve
-    None si no se puede determinar -- en ese caso, mejor dejar pasar el
-    candidato que descartarlo por un fallo de sonda."""
+def _probe_remote_media_info(url: str, timeout: int = 20) -> dict:
+    """Duración y resolución de un vídeo remoto sin descargarlo entero
+    (ffprobe lee solo la cabecera/metadatos vía rango HTTP, gracias al
+    soporte de rangos del CDN de la NASA). Cualquier valor que no se
+    pueda determinar queda en None -- mejor eso que descartar un
+    candidato válido por un fallo de sonda."""
+    import json as _json
     import subprocess
     try:
         result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", url],
+            [
+                "ffprobe", "-v", "error", "-select_streams", "v:0",
+                "-show_entries", "format=duration:stream=width,height",
+                "-of", "json", url,
+            ],
             capture_output=True, text=True, timeout=timeout,
         )
-        return float(result.stdout.strip())
+        data = _json.loads(result.stdout)
     except (subprocess.SubprocessError, ValueError):
-        return None
+        return {"duration": None, "width": None, "height": None}
+
+    duration_raw = (data.get("format") or {}).get("duration")
+    streams = data.get("streams") or []
+    stream = streams[0] if streams else {}
+    try:
+        duration = float(duration_raw) if duration_raw is not None else None
+    except ValueError:
+        duration = None
+    return {"duration": duration, "width": stream.get("width"), "height": stream.get("height")}
 
 
 def search_nasa_videos(
@@ -385,6 +400,7 @@ def search_nasa_videos(
     limit: int = 10,
     exclude_urls: set = None,
     max_duration_seconds: float = 300,
+    min_short_side: int = 720,
 ):
     """
     Busca vídeo real (no imágenes) en la biblioteca de la NASA. Cada
@@ -403,6 +419,23 @@ def search_nasa_videos(
     justo el tipo de material con más probabilidad de incluir entrevistas
     o gente en la Tierra; y un clip corto ya editado encaja mejor como
     material de origen para un montaje musical que un feed en crudo.
+
+    `min_short_side`: calidad mínima HD (por defecto 720, igual que en
+    search_nasa_images) -- a diferencia de las imágenes, aquí no basta
+    con mirar un campo de la ficha: cada candidato tiene VARIAS calidades
+    de archivo (medium/small/orig/large/mobile/preview) y no siempre son
+    lo que su nombre sugiere (una peli antigua puede tener su "orig" en
+    baja resolución de verdad). Se prueba cada calidad en el orden de
+    `_VIDEO_QUALITY_PREFERENCE` y se usa la primera que cumpla a la vez
+    la resolución mínima Y la duración máxima -- así, si la más barata en
+    ancho de banda no llega a HD, se sube de calidad automáticamente en
+    vez de descartar sin más un vídeo que sí tiene una versión válida.
+    "Antiguo" (una misión de los años 60-90, un escaneo histórico) está
+    bien siempre que el ARCHIVO en sí cumpla la resolución mínima --
+    igual que en search_nasa_images, esto no es una excepción para
+    contenido vintage de baja resolución, es la misma exigencia de
+    siempre aplicada también a vídeo (antes solo se comprobaba en
+    imágenes).
     """
     exclude_urls = exclude_urls or set()
     resp = requests.get(
@@ -433,16 +466,29 @@ def search_nasa_videos(
 
         mp4_urls = [u for u in file_urls if u.lower().endswith(".mp4")]
         download_url = None
+        media_info = None
+        # se prueba cada calidad disponible EN ORDEN DE PREFERENCIA (más
+        # barata en ancho de banda primero) hasta encontrar una que
+        # cumpla a la vez la resolución HD mínima y la duración máxima --
+        # si la más barata no llega a HD, se sube de calidad en vez de
+        # descartar sin más un vídeo que sí tiene una versión válida.
         for tier in _VIDEO_QUALITY_PREFERENCE:
             match = next((u for u in mp4_urls if u.lower().endswith(f"~{tier}.mp4")), None)
-            if match:
-                download_url = match.replace("http://", "https://", 1)
-                break
-        if not download_url or download_url in exclude_urls:
-            continue
+            if not match:
+                continue
+            candidate_url = match.replace("http://", "https://", 1)
+            if candidate_url in exclude_urls:
+                continue
+            info = _probe_remote_media_info(candidate_url)
+            if info["duration"] is not None and info["duration"] > max_duration_seconds:
+                continue
+            if info["width"] and info["height"] and min(info["width"], info["height"]) < min_short_side:
+                continue
+            download_url = candidate_url
+            media_info = info
+            break
 
-        duration = _probe_remote_duration(download_url)
-        if duration is not None and duration > max_duration_seconds:
+        if not download_url:
             continue
 
         results.append({
@@ -458,8 +504,8 @@ def search_nasa_videos(
             "commercial_ok": True,
             "derivatives_ok": True,
             "download_url": download_url,
-            "width": None,
-            "height": None,
+            "width": media_info["width"],
+            "height": media_info["height"],
         })
     return results
 
