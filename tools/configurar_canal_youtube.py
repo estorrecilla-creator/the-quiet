@@ -36,6 +36,11 @@ def ask(prompt, required=True):
 def main():
     print("=== Configurar canal de YouTube ===\n")
 
+    channel = ask(
+        "¿Qué canal? (nombre corto usado al subir el LP, ej. \"IWT\", "
+        "\"Telvorn\"...; Enter para el canal de siempre)",
+        required=False,
+    )
     keywords = ask(
         "Palabras clave del canal, separadas por espacios (usa comillas "
         "para frases: \"progressive rock\" \"atmospheric rock\" \"concept "
@@ -57,7 +62,7 @@ def main():
         print("No has indicado nada que cambiar.")
         return
 
-    youtube = get_authenticated_service()
+    youtube = get_authenticated_service(channel)
 
     if keywords or description:
         update_channel_branding(youtube, keywords=keywords, description=description)

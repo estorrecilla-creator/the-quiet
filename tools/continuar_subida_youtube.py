@@ -56,13 +56,13 @@ def _process_lp(lp_dir: Path):
     schedule = load_lp_schedule(schedule_path)
     config = json.loads(config_path.read_text(encoding="utf-8"))
 
-    print(f"\n=== {lp_dir.relative_to(REPO_ROOT)} ===")
-
+    channel = config.get("channel")
+    print(f"\n=== {lp_dir.relative_to(REPO_ROOT)} (canal: {channel or 'default'}) ===")
     playlist_id = config.get("playlist_id")
     youtube = None
     if playlist_id:
         from src.youtube_uploader import get_authenticated_service
-        youtube = get_authenticated_service()
+        youtube = get_authenticated_service(channel)
 
     thumbnails = {int(k): v for k, v in (config.get("thumbnails") or {}).items()}
     track_positions = {int(k): v for k, v in (config.get("track_positions") or {}).items()}
@@ -120,6 +120,7 @@ def _process_lp(lp_dir: Path):
         shorts_playlist_id=shorts_playlist_id,
         youtube=youtube, link_block=link_block,
         idioma=config.get("idioma"), track_positions=track_positions,
+        channel=channel,
     )
 
 

@@ -19,6 +19,7 @@ y a youtube.googleapis.com, no permitidos aquí). Ejecutar en tu PC/servidor.
 
 import os
 import pickle
+import re
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -37,14 +38,34 @@ CLIENT_SECRET_PATH = "config/client_secret.json"
 TOKEN_PATH = "config/token.json"
 
 
-def get_authenticated_service():
-    return _get_authenticated_service()
+def _token_path_for(channel: str = None) -> str:
+    """
+    Un mismo Google/correo puede tener varios canales de YouTube distintos
+    detrás (páginas/marca "Brand Account" separadas, ej. IWT y Telvorn con
+    el mismo correo) -- cada uno necesita su PROPIO token, porque el token
+    guarda a qué canal en concreto se autorizó el acceso, no solo a qué
+    correo. `channel=None` (o "default") usa el token de siempre
+    (config/token.json, sin renombrar nada de lo que ya funcionaba); un
+    nombre de canal nuevo usa config/token_<nombre>.json -- si ese archivo
+    no existe todavía, la primera vez se abre el navegador y hay que
+    elegir ahí, a mano, la página/canal correcta (Google lo pregunta
+    cuando la cuenta tiene más de un canal vinculado).
+    """
+    if not channel or str(channel).strip().lower() in ("", "default"):
+        return TOKEN_PATH
+    slug = re.sub(r"[^a-z0-9_-]+", "_", str(channel).strip().lower()).strip("_") or "default"
+    return f"config/token_{slug}.json"
 
 
-def _get_authenticated_service():
+def get_authenticated_service(channel: str = None):
+    return _get_authenticated_service(channel)
+
+
+def _get_authenticated_service(channel: str = None):
+    token_path = _token_path_for(channel)
     creds = None
-    if os.path.exists(TOKEN_PATH):
-        with open(TOKEN_PATH, "rb") as f:
+    if os.path.exists(token_path):
+        with open(token_path, "rb") as f:
             creds = pickle.load(f)
 
     if not creds or not creds.valid:
@@ -57,7 +78,8 @@ def _get_authenticated_service():
             # mientras el servidor local solo escucha en IPv4, y la
             # redirección de Google falla con "conexión rechazada".
             creds = flow.run_local_server(host="127.0.0.1", bind_addr="127.0.0.1", port=0)
-        with open(TOKEN_PATH, "wb") as f:
+        os.makedirs(os.path.dirname(token_path) or ".", exist_ok=True)
+        with open(token_path, "wb") as f:
             pickle.dump(creds, f)
 
     return build("youtube", "v3", credentials=creds)
@@ -74,6 +96,7 @@ def upload_video(
     thumbnail_path: str = None,
     default_language: str = None,  # ej "es" o "en"; ayuda a YouTube a
     # mostrar el vídeo a la audiencia/nicho del idioma correcto
+    channel: str = None,  # a qué canal subir, si el correo tiene varios (ver _token_path_for)
 ):
     """
     Si se pasa `publish_at`, el vídeo se sube oculto y YouTube lo publica
@@ -81,7 +104,7 @@ def upload_video(
     a tocar nada. YouTube exige que `privacy_status` sea "private" para
     poder programar la publicación, así que se fuerza automáticamente.
     """
-    youtube = _get_authenticated_service()
+    youtube = _get_authenticated_service(channel)
 
     if publish_at:
         privacy_status = "private"
@@ -138,14 +161,14 @@ def upload_video(
     return video_id
 
 
-def update_video_description(video_id: str, description: str):
+def update_video_description(video_id: str, description: str, channel: str = None):
     """
     Cambia la descripción de un vídeo ya subido, sin tocar el resto de
     metadatos. YouTube exige mandar el "snippet" completo en cada
     actualización (no solo el campo que cambia), así que primero se lee
     el snippet actual y solo se sustituye la descripción.
     """
-    youtube = _get_authenticated_service()
+    youtube = _get_authenticated_service(channel)
     current = youtube.videos().list(part="snippet", id=video_id).execute()
     items = current.get("items", [])
     if not items:
@@ -155,7 +178,7 @@ def update_video_description(video_id: str, description: str):
     youtube.videos().update(part="snippet", body={"id": video_id, "snippet": snippet}).execute()
 
 
-def append_to_video_description(video_id: str, extra_text: str, marker: str = None):
+def append_to_video_description(video_id: str, extra_text: str, marker: str = None, channel: str = None):
     """
     Añade `extra_text` al FINAL de la descripción actual de un vídeo ya
     subido, sin tocar lo que ya había por delante (por ejemplo, los
@@ -166,7 +189,7 @@ def append_to_video_description(video_id: str, extra_text: str, marker: str = No
     corregir un enlace equivocado o añadir una plataforma nueva más
     adelante, sin que el bloque viejo se quede pegado para siempre.
     """
-    youtube = _get_authenticated_service()
+    youtube = _get_authenticated_service(channel)
     current = youtube.videos().list(part="snippet", id=video_id).execute()
     items = current.get("items", [])
     if not items:

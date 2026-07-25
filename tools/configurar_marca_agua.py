@@ -43,8 +43,13 @@ def main():
     )
 
     logo_path = ask_path("Ruta al logo (PNG, idealmente con fondo transparente)")
+    channel_raw = input(
+        "¿Qué canal? (nombre corto usado al subir el LP, ej. \"IWT\", "
+        "\"Telvorn\"...; Enter para el canal de siempre): "
+    ).strip()
+    channel = _strip_quotes(channel_raw) or None
 
-    youtube = get_authenticated_service()
+    youtube = get_authenticated_service(channel)
     set_channel_watermark(youtube, logo_path)
     print("\nListo. El logo ya está configurado como marca de agua del canal.")
 

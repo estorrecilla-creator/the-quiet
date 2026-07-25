@@ -500,6 +500,17 @@ def _run_youtube_phase(
         print("No hay ningún tema generado, no hay nada que programar.")
         return
 
+    channel = st.ask(
+        "¿A qué canal de YouTube subimos este LP? Escribe un nombre corto "
+        "para identificarlo (ej. \"IWT\", \"Telvorn\"...) — un mismo correo "
+        "puede tener varios canales/páginas distintos detrás, así que la "
+        "PRIMERA vez que uses un nombre nuevo se abrirá el navegador para "
+        "que elijas ahí, a mano, esa página en concreto (aunque el login "
+        "sea el mismo correo de siempre). Las siguientes veces ya no vuelve "
+        "a preguntar, usa el token guardado de ese canal. Enter = el canal "
+        "de siempre (el que ya usabas antes de que existiera esta pregunta)",
+        required=False,
+    )
     idioma = st.ask("Idioma principal del contenido (es/en...; Enter para no indicarlo)", required=False)
     playlist_name = st.ask("Nombre de la lista de reproducción del LP (Enter para no usar ninguna)", required=False)
     playlist_thumbnail_path = st.ask_path(
@@ -557,7 +568,7 @@ def _run_youtube_phase(
         from src.youtube_sections import add_playlist_to_section
         from src.metadata_generator import generate_playlist_metadata
         from src.discografia import register_and_link_lp_playlist
-        youtube = get_authenticated_service()
+        youtube = get_authenticated_service(channel)
         playlist_id = create_or_get_playlist(youtube, playlist_name)
         print(f"-> Lista de reproducción: {playlist_url(playlist_id)}")
         link_block += f"\n\n▶ Escucha todo el álbum: {playlist_url(playlist_id)}"
@@ -624,12 +635,14 @@ def _run_youtube_phase(
             "playlist_thumbnail_applied": bool(playlist_thumbnail_path),
             "idioma": idioma,
             "track_positions": {str(k): v for k, v in track_positions.items()},
+            "channel": channel,
         }, f, ensure_ascii=False, indent=2)
 
     upload_lp_schedule(
         schedule, save_path, thumbnails=thumbnails, playlist_id=playlist_id,
         shorts_playlist_id=shorts_playlist_id,
         youtube=youtube, link_block=link_block, idioma=idioma, track_positions=track_positions,
+        channel=channel,
     )
 
     if any(not item.get("video_id") for item in schedule):

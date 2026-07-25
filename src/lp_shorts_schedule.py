@@ -263,14 +263,16 @@ def _is_quota_error(exc) -> bool:
 def upload_lp_schedule(
     schedule, save_path, thumbnails=None, playlist_id=None, shorts_playlist_id=None,
     youtube=None, link_block: str = "", idioma: str = None, track_positions=None,
-    daily_quota_budget: int = DEFAULT_DAILY_QUOTA_BUDGET,
+    daily_quota_budget: int = DEFAULT_DAILY_QUOTA_BUDGET, channel: str = None,
 ):
     """
     Sube (programada) cada elemento de `schedule`, guardando el progreso
     tras cada subida — si se corta a mitad, al relanzarlo se salta lo ya
     subido en vez de duplicarlo. `thumbnails`: dict {número_de_tema: ruta_
     miniatura} — la MISMA miniatura del tema se reutiliza para su vídeo
-    principal y todos sus Shorts.
+    principal y todos sus Shorts. `channel`: a qué canal de YouTube subir,
+    si el correo tiene varios detrás (ver `youtube_uploader._token_path_for`)
+    — None/"default" usa el canal de siempre.
 
     El orden de SUBIDA no afecta cuándo se publica de verdad cada vídeo
     (eso lo fija `publishAt`), así que se prioriza tener el álbum entero
@@ -325,7 +327,7 @@ def upload_lp_schedule(
         nonlocal youtube
         if youtube is None:
             from src.youtube_uploader import get_authenticated_service
-            youtube = get_authenticated_service()
+            youtube = get_authenticated_service(channel)
         return youtube
 
     def _upload_item(item, extra_description=""):
@@ -351,6 +353,7 @@ def upload_lp_schedule(
                 publish_at=item["publish_at_utc"],
                 thumbnail_path=thumbnail_path,
                 default_language=idioma,
+                channel=channel,
             )
         except Exception as e:
             if _is_quota_error(e):
@@ -438,7 +441,7 @@ def upload_lp_schedule(
                 + f"\n\n▶ Sigue escuchando: https://youtu.be/{next_id}"
             )
             try:
-                update_video_description(main_item["video_id"], full_description)
+                update_video_description(main_item["video_id"], full_description, channel=channel)
             except Exception as e:
                 if _is_quota_error(e):
                     break

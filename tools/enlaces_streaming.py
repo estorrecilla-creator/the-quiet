@@ -88,16 +88,20 @@ def main():
 
     block = build_streaming_block(links)
 
-    from src.youtube_uploader import get_authenticated_service
-    youtube = get_authenticated_service()
-
+    import json
     config_path = lp_dir / "config_subida_youtube.json"
+    channel = None
+    config = {}
     if config_path.exists():
-        import json
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        channel = config.get("channel")
 
+    from src.youtube_uploader import get_authenticated_service
+    youtube = get_authenticated_service(channel)
+
+    if config_path.exists():
         from src.discografia import update_playlist_streaming_links
 
-        config = json.loads(config_path.read_text(encoding="utf-8"))
         playlist_id = config.get("playlist_id")
         if playlist_id:
             updated = update_playlist_streaming_links(
@@ -123,7 +127,7 @@ def main():
     for item in uploaded:
         # la descripción se puede editar aunque el vídeo siga programado/
         # privado, así que esto funciona siempre.
-        append_to_video_description(item["video_id"], block, marker=BLOCK_MARKER)
+        append_to_video_description(item["video_id"], block, marker=BLOCK_MARKER, channel=channel)
         # el comentario NO -- YouTube lo rechaza en vídeos todavía
         # privados (403 "forbidden"). Si aún no es público, se deja para
         # que lo coja solo la subida diaria en cuanto le toque publicarse
