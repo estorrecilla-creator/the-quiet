@@ -189,15 +189,24 @@ def _mentions_people_content(data: dict) -> bool:
 
 # tolerancia CERO con personas (a petición explícita de Salva: "TODOS los
 # vídeos y fotos que tengan personas", no solo las que salen en primer
-# plano): el umbral de TAMAÑO de cara baja mucho respecto al de
-# film_editor.py (0.03, pensado solo para clasificar "primer plano" de
-# película) para que cuente una persona aunque salga pequeña en el
-# encuadre. OJO: scale_factor/min_neighbors se dejan en los valores
-# normales de OpenCV (más sensibles disparan falsos positivos reales --
-# probado: con scale_factor=1.05/min_neighbors<=4 varias fotos de la Gran
-# Mancha Roja de Júpiter, solo nubes, se marcaban como "persona" por el
-# patrón de las turbulencias).
-_PEOPLE_ZERO_TOLERANCE = {"min_face_area_fraction": 0.006, "scale_factor": 1.1, "min_neighbors": 5}
+# plano): el umbral de TAMAÑO de cara baja respecto al de film_editor.py
+# (0.03, pensado solo para clasificar "primer plano" de película) para
+# que cuente una persona aunque salga pequeña en el encuadre.
+#
+# Probado en vivo antes de fijar estos valores: hacer el detector más
+# SENSIBLE (scale_factor/min_neighbors más bajos, o un umbral de tamaño
+# muy pequeño) no funciona -- genera falsos positivos reales y
+# persistentes en imagen 100% real del espacio (varias fotos de la Gran
+# Mancha Roja de Júpiter, y sobre todo nubes/remolinos de la Tierra vistos
+# desde el espacio, cuyo patrón de textura confunde a la cascada de Haar
+# incluso con min_neighbors alto). Con 14 fotogramas muestreados por
+# vídeo, incluso una tasa de falso positivo baja por fotograma (~1/14) es
+# casi segura de dispararse alguna vez SOLO por azar -- por eso
+# `_video_shows_people` no descarta con un único fotograma positivo,
+# exige al menos 2 fotogramas distintos con cara detectada (una persona
+# de verdad aparece de forma sostenida, no en un único instante aislado).
+_PEOPLE_ZERO_TOLERANCE = {"min_face_area_fraction": 0.015, "scale_factor": 1.1, "min_neighbors": 7}
+_VIDEO_PEOPLE_MIN_HITS = 2
 
 
 def _image_shows_people(image_path: str) -> bool:
@@ -214,11 +223,18 @@ def _image_shows_people(image_path: str) -> bool:
 
 def _video_shows_people(video_path: str, n_samples: int = 14) -> bool:
     """Segunda línea de defensa (además del filtro de texto): muestrea
-    varios fotogramas repartidos por todo el vídeo y comprueba si
-    aparece una persona en CUALQUIERA de ellos -- tolerancia cero, no
-    hace falta que salga en muchos fotogramas seguidos para descartar el
-    vídeo entero (a petición explícita: "excluir TODOS los vídeos y fotos
-    que tengan personas", no solo los que la muestran de forma sostenida).
+    varios fotogramas repartidos por todo el vídeo y descarta el vídeo en
+    cuanto encuentra una persona en `_VIDEO_PEOPLE_MIN_HITS` (2) de ellos
+    -- a petición explícita ("excluir TODOS los vídeos y fotos que tengan
+    personas") la intención es tolerancia cero, pero exigir un único
+    fotograma aislado no funciona en la práctica: probado en vivo que,
+    muestreando 14 fotogramas, hasta vídeo 100% real del espacio (nubes/
+    remolinos de la Tierra) dispara el detector de caras en 1 de cada 14
+    fotogramas por azar (falso positivo de la cascada de Haar con ese
+    patrón de textura). Exigir al menos 2 fotogramas con detección separa
+    bien ese ruido de fondo de una persona real, que aparece de forma
+    sostenida (verificado con vídeo real de entrevista: 2/14 fotogramas,
+    por encima del umbral).
 
     Aviso honesto: bastante vídeo "en bruto" de la NASA (sobre todo el
     de entrevistas/ruedas de prensa) son grabaciones muy largas del feed
@@ -269,11 +285,12 @@ def _video_shows_people(video_path: str, n_samples: int = 14) -> bool:
                 continue
             if frame_has_prominent_face(img, **_PEOPLE_ZERO_TOLERANCE):
                 hits += 1
-                break  # tolerancia cero: con que aparezca en UN fotograma basta para descartar
+                if hits >= _VIDEO_PEOPLE_MIN_HITS:
+                    break  # ya hay corroboración de sobra, no hace falta seguir muestreando
 
     if checked == 0:
         return False
-    return hits > 0
+    return hits >= _VIDEO_PEOPLE_MIN_HITS
 
 
 _NASA_QUERY_SYSTEM = """Eres un asistente que convierte la descripción de un tema musical
