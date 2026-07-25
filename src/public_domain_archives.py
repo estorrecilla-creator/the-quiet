@@ -163,6 +163,105 @@ def search_wikimedia_commons(
 
 NASA_API = "https://images-api.nasa.gov/search"
 
+# la biblioteca de la NASA mezcla vídeo real del espacio con MUCHO
+# contenido de relaciones públicas -- entrevistas a astronautas, ruedas
+# de prensa, podcasts, visitas de estudiantes... nada de eso vale para un
+# vídeo musical ambientado en el espacio. Primer filtro (barato, antes de
+# descargar nada): descartar cualquier ficha cuyo título/descripción/
+# palabras clave delate ese tipo de contenido.
+_PEOPLE_TEXT_BLOCKLIST = (
+    "interview", "news conference", "press conference", "briefing",
+    "town hall", "q&a", "q & a", "panel discussion", "media roundtable",
+    "media day", "meet the crew", "crew news", "talks about", "talks with",
+    "speaks about", "speaks with", "discusses", "answers questions",
+    "classroom", "students visit", "media availability", "press availability",
+    "podcast", "town hall meeting", "media interviews", "remote interviews",
+)
+
+
+def _mentions_people_content(data: dict) -> bool:
+    text = " ".join([
+        data.get("title") or "", data.get("description") or "",
+        " ".join(data.get("keywords") or []),
+    ]).lower()
+    return any(term in text for term in _PEOPLE_TEXT_BLOCKLIST)
+
+
+def _image_shows_people(image_path: str) -> bool:
+    import numpy as np
+    from PIL import Image
+
+    from src.face_detection import frame_has_prominent_face
+    try:
+        img = np.array(Image.open(image_path).convert("RGB"))
+    except Exception:
+        return False
+    return frame_has_prominent_face(img)
+
+
+def _video_shows_people(video_path: str, n_samples: int = 14) -> bool:
+    """Segunda línea de defensa (además del filtro de texto): muestrea
+    varios fotogramas repartidos por todo el vídeo y comprueba si
+    aparecen caras humanas prominentes en una parte relevante de ellos --
+    una entrevista o un plano de gente en la Tierra tiene cara en
+    prácticamente todos los fotogramas, así que basta con un umbral bajo
+    para detectarlo sin marcar por error una persona diminuta de fondo en
+    un único fotograma suelto.
+
+    Aviso honesto: bastante vídeo "en bruto" de la NASA (sobre todo el
+    de entrevistas/ruedas de prensa) son grabaciones muy largas del feed
+    de satélite completo, con tramos muertos entre segmentos -- ningún
+    número de muestras razonable garantiza pillar siempre el segmento
+    exacto donde aparece la persona. Esta comprobación es un respaldo,
+    no la defensa principal: el filtro de texto (título/descripción/
+    palabras clave con "interview", "news conference"...) ya descarta la
+    inmensa mayoría de este contenido ANTES de llegar aquí."""
+    import subprocess
+    import tempfile
+
+    import numpy as np
+    from PIL import Image
+
+    from src.face_detection import frame_has_prominent_face
+
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", video_path],
+            capture_output=True, text=True,
+        )
+        duration = float(result.stdout.strip())
+    except (ValueError, subprocess.SubprocessError):
+        return False
+    if duration <= 0:
+        return False
+
+    margin = duration * 0.05
+    span = max(duration - 2 * margin, 0.0)
+    times = [margin + span * i / max(n_samples - 1, 1) for i in range(n_samples)]
+
+    hits = 0
+    checked = 0
+    with tempfile.TemporaryDirectory(prefix="people_check_") as tmp:
+        for i, t in enumerate(times):
+            frame_path = str(Path(tmp) / f"f{i}.jpg")
+            subprocess.run(
+                ["ffmpeg", "-y", "-ss", str(t), "-i", video_path, "-frames:v", "1", frame_path],
+                capture_output=True,
+            )
+            if not Path(frame_path).exists():
+                continue
+            checked += 1
+            try:
+                img = np.array(Image.open(frame_path).convert("RGB"))
+            except Exception:
+                continue
+            if frame_has_prominent_face(img):
+                hits += 1
+
+    if checked == 0:
+        return False
+    return (hits / checked) >= 0.2
+
 
 def generate_nasa_query(track_title: str, context: str) -> str:
     """
@@ -215,6 +314,8 @@ def search_nasa_images(
             continue
         data = item["data"][0]
         if data.get("copyright"):
+            continue
+        if _mentions_people_content(data):
             continue
 
         # el enlace "canonical" (~orig) es la máxima calidad disponible;
@@ -293,6 +394,8 @@ def search_nasa_videos(
         data = item["data"][0]
         if data.get("copyright"):
             continue
+        if _mentions_people_content(data):
+            continue
 
         try:
             manifest_resp = requests.get(item["href"], headers={"User-Agent": USER_AGENT}, timeout=30)
@@ -330,6 +433,14 @@ def search_nasa_videos(
     return results
 
 
+# cuántos candidatos de más pedir por cada uno que hace falta -- el
+# filtro de texto ya descarta bastante contenido de entrevistas/prensa,
+# pero conviene margen de sobra para que, si además el filtro visual
+# rechaza alguno tras descargarlo, todavía queden candidatos frescos sin
+# tener que repetir la búsqueda.
+_CANDIDATE_OVERFETCH = 5
+
+
 def gather_nasa_assets(
     query: str, out_dir: str, log_path: str = None,
     n_images: int = 3, n_videos: int = 2, exclude_urls: set = None,
@@ -342,19 +453,65 @@ def gather_nasa_assets(
     Devuelve la lista de rutas locales descargadas, en el mismo orden en
     que deberían reproducirse (imágenes primero, luego vídeo). Actualiza
     `exclude_urls` in-place con lo ya usado, para no repetir entre temas.
+
+    Cada candidato pasa DOS filtros antes de aceptarse: uno de texto
+    (título/descripción/palabras clave con pinta de entrevista/rueda de
+    prensa, ya aplicado dentro de search_nasa_images/search_nasa_videos)
+    y uno visual, tras descargarlo, que rechaza cualquier archivo con una
+    cara humana prominente en una parte relevante de sus fotogramas --
+    "solo vídeo/foto del espacio, nada de entrevistas ni gente en la
+    Tierra". Los candidatos rechazados se borran sin dejar rastro (no se
+    cuentan en el registro de auditoría, nunca llegaron a usarse de
+    verdad) y se prueba con el siguiente de la lista.
     """
     exclude_urls = exclude_urls if exclude_urls is not None else set()
     downloaded = []
 
-    for candidate in search_nasa_images(query, limit=n_images, exclude_urls=exclude_urls):
-        downloaded.append(download_candidate(candidate, out_dir, log_path))
+    image_candidates = search_nasa_images(query, limit=n_images * _CANDIDATE_OVERFETCH, exclude_urls=exclude_urls)
+    got = 0
+    for candidate in image_candidates:
+        if got >= n_images:
+            break
+        local_path = download_candidate(candidate, out_dir, log_path=None)
+        if _image_shows_people(local_path):
+            Path(local_path).unlink(missing_ok=True)
+            continue
+        _append_audit_entry(candidate, local_path, log_path)
+        downloaded.append(local_path)
         exclude_urls.add(candidate["download_url"])
+        got += 1
 
-    for candidate in search_nasa_videos(query, limit=n_videos, exclude_urls=exclude_urls):
-        downloaded.append(download_candidate(candidate, out_dir, log_path))
+    video_candidates = search_nasa_videos(query, limit=n_videos * _CANDIDATE_OVERFETCH, exclude_urls=exclude_urls)
+    got = 0
+    for candidate in video_candidates:
+        if got >= n_videos:
+            break
+        local_path = download_candidate(candidate, out_dir, log_path=None)
+        if _video_shows_people(local_path):
+            Path(local_path).unlink(missing_ok=True)
+            continue
+        _append_audit_entry(candidate, local_path, log_path)
+        downloaded.append(local_path)
         exclude_urls.add(candidate["download_url"])
+        got += 1
 
     return downloaded
+
+
+def _append_audit_entry(candidate: dict, downloaded_to: str, log_path: str = None):
+    if not log_path:
+        return
+    log_path = Path(log_path)
+    entries = []
+    if log_path.exists():
+        entries = json.loads(log_path.read_text(encoding="utf-8"))
+    entries.append({
+        **candidate,
+        "downloaded_to": downloaded_to,
+        "downloaded_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    })
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def download_candidate(candidate: dict, out_dir: str, log_path: str = None) -> str:
@@ -392,17 +549,6 @@ def download_candidate(candidate: dict, out_dir: str, log_path: str = None) -> s
         raise last_exc
     out_path.write_bytes(resp.content)
 
-    if log_path:
-        log_path = Path(log_path)
-        entries = []
-        if log_path.exists():
-            entries = json.loads(log_path.read_text(encoding="utf-8"))
-        entries.append({
-            **candidate,
-            "downloaded_to": str(out_path),
-            "downloaded_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        })
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_path.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
+    _append_audit_entry(candidate, str(out_path), log_path)
 
     return str(out_path)

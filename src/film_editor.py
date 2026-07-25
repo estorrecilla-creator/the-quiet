@@ -93,33 +93,20 @@ def _extract_mid_frame(film_path: str, start: float, end: float, out_path: str):
 
 def _is_closeup(frame_path: str, min_face_area_fraction: float = 0.12) -> bool:
     """Heurístico ligero: hay una cara detectada que ocupa una fracción
-    grande del fotograma -> se trata como primer plano. Si la API de
-    caras de mediapipe no está disponible en esta instalación (varía
-    según la versión), se degrada a "no lo sé" (wide) en vez de fallar —
-    es un heurístico de más, no algo de lo que dependa el montaje."""
-    try:
-        import mediapipe as mp
-        from PIL import Image
-    except ImportError:
-        return False
-
+    grande del fotograma -> se trata como primer plano. Si no se puede
+    comprobar (fotograma ilegible), se degrada a "no lo sé" (wide) en vez
+    de fallar — es un heurístico de más, no algo de lo que dependa el
+    montaje."""
     if not Path(frame_path).exists():
         return False
 
+    from src.face_detection import frame_has_prominent_face
     try:
-        img = Image.open(frame_path).convert("RGB")
-        with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5) as detector:
-            result = detector.process(np.array(img))
-            if not result.detections:
-                return False
-            best = max(
-                result.detections,
-                key=lambda d: d.location_data.relative_bounding_box.width * d.location_data.relative_bounding_box.height,
-            )
-            box = best.location_data.relative_bounding_box
-            return (box.width * box.height) >= min_face_area_fraction
+        from PIL import Image
+        img = np.array(Image.open(frame_path).convert("RGB"))
     except Exception:
         return False
+    return frame_has_prominent_face(img, min_face_area_fraction=min_face_area_fraction)
 
 
 def _has_motion(film_path: str, start: float, end: float, min_diff: float = 4.0) -> bool:
