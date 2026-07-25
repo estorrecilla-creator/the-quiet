@@ -814,7 +814,12 @@ def main():
         os.environ.get("PEXELS_API_KEY") or os.environ.get("PIXABAY_API_KEY")
         or os.environ.get("COVERR_API_KEY")
     )
-    if not have_openai and not have_stock:
+    # esta clave/API solo hace falta para el modo "portada de imagen/vídeo
+    # de stock" (_resolve_cover_unattended) -- ni el modo "película"
+    # (film_edit_ctx) ni el modo NASA (nasa_ctx) la usan en absoluto, así
+    # que no debe bloquear el lanzamiento cuando se ha elegido alguno de
+    # esos dos modos.
+    if not nasa_ctx and not film_edit_ctx and not have_openai and not have_stock:
         print("  Aviso: no tienes OPENAI_API_KEY ni PEXELS_API_KEY/PIXABAY_API_KEY/COVERR_API_KEY en tu .env — no podré generar portadas para ningún tema. Añade alguna clave antes de continuar.")
         sys.exit(1)
 
