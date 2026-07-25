@@ -164,6 +164,30 @@ def search_wikimedia_commons(
 NASA_API = "https://images-api.nasa.gov/search"
 
 
+def generate_nasa_query(track_title: str, context: str) -> str:
+    """
+    Convierte el título/contexto de un tema (en español, pensado para
+    humanos) en un término de búsqueda en inglés efectivo contra la
+    biblioteca de la NASA — la búsqueda de la NASA funciona mucho mejor
+    con términos concretos en inglés (ej. "Saturn rings Cassini") que
+    con frases largas o en español.
+    """
+    from src.anthropic_utils import call_claude_json
+
+    system = (
+        "Eres un asistente que convierte la descripción de un tema musical "
+        "en un término de búsqueda corto y efectivo en INGLÉS para la "
+        "biblioteca de imágenes/vídeo de la NASA (images.nasa.gov). "
+        "El término debe ser concreto (objeto astronómico + característica "
+        "visual, ej. 'Saturn rings Cassini', 'Andromeda galaxy Hubble', "
+        "'Jupiter Great Red Spot'), de 2 a 5 palabras, sin explicaciones. "
+        "Responde ÚNICAMENTE con JSON: {\"query\": \"...\"}"
+    )
+    user = f"Título del tema: {track_title}\nContexto: {context}"
+    result = call_claude_json(system, user, max_tokens=200, model="claude-sonnet-5")
+    return result.get("query", track_title)
+
+
 def search_nasa_images(
     query: str,
     limit: int = 20,
@@ -304,6 +328,33 @@ def search_nasa_videos(
             "height": None,
         })
     return results
+
+
+def gather_nasa_assets(
+    query: str, out_dir: str, log_path: str = None,
+    n_images: int = 3, n_videos: int = 2, exclude_urls: set = None,
+):
+    """
+    Busca y descarga una mezcla de imágenes y vídeo real de la NASA para
+    `query` -- pensado para alimentar directamente una portada de vídeo
+    con varias imágenes/clips (cada uno con su propio movimiento de
+    cámara o reproducción real), como ya soporta generate_main_video.
+    Devuelve la lista de rutas locales descargadas, en el mismo orden en
+    que deberían reproducirse (imágenes primero, luego vídeo). Actualiza
+    `exclude_urls` in-place con lo ya usado, para no repetir entre temas.
+    """
+    exclude_urls = exclude_urls if exclude_urls is not None else set()
+    downloaded = []
+
+    for candidate in search_nasa_images(query, limit=n_images, exclude_urls=exclude_urls):
+        downloaded.append(download_candidate(candidate, out_dir, log_path))
+        exclude_urls.add(candidate["download_url"])
+
+    for candidate in search_nasa_videos(query, limit=n_videos, exclude_urls=exclude_urls):
+        downloaded.append(download_candidate(candidate, out_dir, log_path))
+        exclude_urls.add(candidate["download_url"])
+
+    return downloaded
 
 
 def download_candidate(candidate: dict, out_dir: str, log_path: str = None) -> str:

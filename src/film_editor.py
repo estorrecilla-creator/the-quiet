@@ -174,11 +174,28 @@ def tag_scene_types(film_path: str, scenes, cache_path: str = None):
     return tagged
 
 
+def tag_scenes_multi_source(video_paths, min_scene_len: float = 1.0, threshold: float = 0.35):
+    """Igual que encadenar `detect_scenes()` + `tag_scene_types()` sobre
+    varios archivos de vídeo de origen (ej. varios clips de la NASA para
+    un mismo tema) en vez de una sola película. Cada uno se detecta/cachea
+    por su cuenta (mismo caché en disco junto a cada archivo, nada nuevo
+    ahí), y el resultado combinado añade a cada plano su propio
+    `scene["source"]` para que `build_energy_driven_edit()` y
+    `render_edit()` sepan de qué archivo viene cada corte."""
+    combined = []
+    for path in video_paths:
+        scenes = detect_scenes(path, min_scene_len=min_scene_len, threshold=threshold)
+        tagged = tag_scene_types(path, scenes)
+        for s in tagged:
+            combined.append({**s, "source": path})
+    return combined
+
+
 def build_energy_driven_edit(
     audio_path: str, start: float, end: float, tagged_scenes,
     exclude_ranges: set, min_cut: float = 1.2, max_cut: float = 5.5,
     sr: int = 22050, used_scenes_out: list = None,
-    film_path: str = None, film_duration: float = None,
+    film_path=None, film_duration: float = None,
 ):
     """
     Decide la lista ordenada de cortes (planos + duración de cada uno)
@@ -192,15 +209,22 @@ def build_energy_driven_edit(
     se le añade cada plano de `tagged_scenes` realmente usado (fresco o
     reutilizado), útil para luego construir ese pool local por tema.
 
-    Si el pool disponible (fresco + reciclado) se queda corto y se pasa
-    `film_path`, en vez de fallar o repetir siempre los mismos planos se
-    pasa a coger segundos sueltos de cualquier punto de la película
-    completa (nunca error, nunca imagen fija — siempre cortes de
-    segundos distintos mientras la película tenga metraje de sobra).
+    `film_path`: para el último recurso de "segundos sueltos" cuando el
+    pool se queda corto. Puede ser una sola ruta (una película, como con
+    Caligari) o una LISTA de rutas (varios vídeos de origen, ej. varios
+    clips de la NASA para un mismo tema) — en ese caso se elige un
+    archivo al azar de la lista para el segundo suelto. Si `tagged_scenes`
+    viene de `tag_scenes_multi_source()`, cada plano ya lleva su propio
+    `scene["source"]`, y cada corte del resultado hereda ese mismo campo
+    para que `render_edit()` sepa de qué archivo extraerlo — así un
+    mismo montaje puede mezclar cortes de varios vídeos distintos, no
+    solo de uno. Si un plano no trae "source" (modo de un solo archivo,
+    como hasta ahora), se deja como None y `render_edit()` usa su propio
+    `film_path` por defecto.
 
-    Devuelve una lista de dicts [{"start", "end", "cut_duration"}, ...]
-    con planos de `tagged_scenes` (o, en el último recurso, de la
-    película completa).
+    Devuelve una lista de dicts [{"start", "end", "cut_duration", "source"}, ...]
+    con planos de `tagged_scenes` (o, en el último recurso, de alguno de
+    los archivos en `film_path`).
     """
     y, _ = librosa.load(audio_path, sr=sr, offset=start, duration=end - start, mono=True)
     hop = 512
@@ -227,12 +251,27 @@ def build_energy_driven_edit(
         # si TODOS los planos válidos resultaran estáticos (poco probable
         # salvo película casi solo de texto), mejor usar esos que reventar.
         all_valid = [s for s in tagged_scenes if _long_enough(s)]
-    if not all_valid and not film_path:
+
+    film_paths = (
+        [film_path] if isinstance(film_path, str)
+        else list(film_path) if film_path else []
+    )
+
+    if not all_valid and not film_paths:
         raise RuntimeError(
             "Ningún plano de la película llega a la duración mínima de corte "
             f"({min_cut}s) — prueba con una película con planos más largos, o "
             "baja min_cut."
         )
+
+    _duration_cache = {}
+    if film_duration is not None and len(film_paths) == 1:
+        _duration_cache[film_paths[0]] = film_duration
+
+    def _duration_of(path):
+        if path not in _duration_cache:
+            _duration_cache[path] = _probe_duration(path)
+        return _duration_cache[path]
 
     fresh = [s for s in all_valid if f"{s['start']}-{s['end']}" not in exclude_ranges]
     pools = _shuffled_pools(fresh)
@@ -242,9 +281,7 @@ def build_energy_driven_edit(
     # sin ningún plano válido (caso extremo) pero con la película
     # disponible, se salta directo a segundos sueltos en vez de dejar que
     # el bucle intente sacar un plano de un pool vacío.
-    random_fallback_active = not all_valid and bool(film_path)
-    if film_path and film_duration is None:
-        film_duration = _probe_duration(film_path)
+    random_fallback_active = not all_valid and bool(film_paths)
 
     edit = []
     t = 0.0
@@ -263,9 +300,14 @@ def build_energy_driven_edit(
         if random_fallback_active:
             # el pool (fresco + reciclado) ya no da variedad de verdad —
             # en vez de seguir repitiendo siempre los mismos planos, se
-            # coge un segundo cualquiera de la película entera.
-            scene_offset = random.uniform(0, max(film_duration - cut_duration, 0.0))
-            edit.append({"start": scene_offset, "end": scene_offset + cut_duration, "cut_duration": cut_duration})
+            # coge un segundo cualquiera de uno de los archivos de origen.
+            fallback_path = random.choice(film_paths)
+            fallback_duration = _duration_of(fallback_path)
+            scene_offset = random.uniform(0, max(fallback_duration - cut_duration, 0.0))
+            edit.append({
+                "start": scene_offset, "end": scene_offset + cut_duration,
+                "cut_duration": cut_duration, "source": fallback_path,
+            })
             t += cut_duration
             continue
 
@@ -276,14 +318,19 @@ def build_energy_driven_edit(
             # Se acabaron los planos sin usar todavía dentro de este pool.
             reused_any = True
             reshuffle_count += 1
-            if reshuffle_count > 1 and film_path:
+            if reshuffle_count > 1 and film_paths:
                 # ya se ha reciclado el mismo pool más de una vez: mejor
-                # pasar a segundos sueltos de toda la película (nunca
-                # error, nunca imagen fija) que seguir dando vueltas
+                # pasar a segundos sueltos de uno de los archivos de origen
+                # (nunca error, nunca imagen fija) que seguir dando vueltas
                 # siempre a los mismos pocos planos.
                 random_fallback_active = True
-                scene_offset = random.uniform(0, max(film_duration - cut_duration, 0.0))
-                edit.append({"start": scene_offset, "end": scene_offset + cut_duration, "cut_duration": cut_duration})
+                fallback_path = random.choice(film_paths)
+                fallback_duration = _duration_of(fallback_path)
+                scene_offset = random.uniform(0, max(fallback_duration - cut_duration, 0.0))
+                edit.append({
+                    "start": scene_offset, "end": scene_offset + cut_duration,
+                    "cut_duration": cut_duration, "source": fallback_path,
+                })
                 t += cut_duration
                 continue
             pools = _shuffled_pools(all_valid)
@@ -299,7 +346,10 @@ def build_energy_driven_edit(
         used_len = min(cut_duration, scene_len)
         scene_offset = scene["start"] if scene_len <= used_len else scene["start"] + random.uniform(0, scene_len - used_len)
 
-        edit.append({"start": scene_offset, "end": scene_offset + used_len, "cut_duration": used_len})
+        edit.append({
+            "start": scene_offset, "end": scene_offset + used_len,
+            "cut_duration": used_len, "source": scene.get("source"),
+        })
         t += used_len
 
     if random_fallback_active:
@@ -319,12 +369,20 @@ def build_energy_driven_edit(
 
 
 def render_edit(
-    film_path: str, edit, out_path: str, w: int = 1080, h: int = 1920, fps: int = 25,
+    film_path: str = None, edit=None, out_path: str = None, w: int = 1080, h: int = 1920, fps: int = 25,
     fade_duration: float = 0.4,
 ) -> str:
     """Extrae y encadena los planos de `edit` en un único vídeo de salida,
     escalado/recortado a (w, h), con la duración exacta de la suma de
     `cut_duration`.
+
+    `film_path` es opcional (por defecto None): sirve como archivo de
+    origen POR DEFECTO cuando un corte de `edit` no trae su propio
+    `cut["source"]` (modo de un solo archivo, como hasta ahora). Si
+    `edit` viene de un montaje multi-fuente (`tag_scenes_multi_source()`
+    + `build_energy_driven_edit()`), cada corte ya trae su `"source"` y
+    se extrae de ese archivo en concreto — así un mismo vídeo de salida
+    puede mezclar cortes de varios archivos distintos.
 
     Nada de corte seco ni de disolución mezclando dos imágenes (efecto
     "montaje"): cada plano funde a negro por completo antes de que
@@ -338,6 +396,12 @@ def render_edit(
     try:
         clip_paths = []
         for i, cut in enumerate(edit):
+            source = cut.get("source") or film_path
+            if not source:
+                raise RuntimeError(
+                    f"El corte {i} no trae su propio 'source' y no se ha pasado "
+                    "un film_path por defecto — no hay de qué archivo extraerlo."
+                )
             clip_path = str(tmp_dir / f"cut_{i:03d}.mp4")
             duration = cut["cut_duration"]
             fd = min(fade_duration, max(duration / 2 - 0.02, 0.0))
@@ -347,7 +411,7 @@ def render_edit(
                 if fd > 0.02 else ""
             )
             cmd = [
-                "ffmpeg", "-y", "-ss", str(cut["start"]), "-i", film_path,
+                "ffmpeg", "-y", "-ss", str(cut["start"]), "-i", source,
                 "-t", str(duration),
                 "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps={fps},setsar=1{fade_filter}",
                 "-an", clip_path,
