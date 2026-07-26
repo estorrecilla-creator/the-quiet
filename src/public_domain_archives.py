@@ -178,6 +178,33 @@ _PEOPLE_TEXT_BLOCKLIST = (
     "podcast", "town hall meeting", "media interviews", "remote interviews",
 )
 
+# confirmado en vivo (queja real de Salva: "el programa selecciona
+# secciones en talleres, oficinas de control de lanzamiento, vídeos con
+# palabras grabadas"): una gran parte del catálogo de vídeo de la NASA es
+# material de ingeniería en TIERRA -- montaje/integración de la nave en
+# sala blanca, pruebas de motores, fábricas, salas de control -- no
+# imagen real del espacio, aunque el título mencione una misión espacial
+# de verdad. "Media Reel" en particular es el término propio de la NASA
+# para estos vídeos de recopilación de prensa (probado: "Europa Clipper
+# Spacecraft Assembly Media Reel", "NASA's Psyche Mission Media Reel"...)
+# y además suele llevar muchos rótulos/texto identificando cada plano,
+# que es justo el otro problema reportado.
+_GROUND_FACILITY_TEXT_BLOCKLIST = (
+    "media reel", "clean room", "high bay", "integration facility",
+    "assembly facility", "assembly building", "processing facility",
+    "test facility", "testing facility", "test stand", "thermal vacuum",
+    "static fire", "engine test", "booster test", "spin test", "full-scale",
+    "control room", "mission control", "control center", "operations center",
+    "launch control", "briefing room", "conference room", "press site",
+    "workshop", "hangar", "factory", "manufacturing",
+    "rolls out", "next phase of production", "invites media",
+    "instrument integration", "spacecraft assembly", "spacecraft integration",
+    "assembly", "integration", "hardware highlights",
+    "super guppy", "pegasus barge", "transportation stand", "journey from",
+    "this week @", "this week at nasa", "inside ksc", "prepared for testing",
+    "readied for testing", "manufactured",
+)
+
 
 def _mentions_people_content(data: dict) -> bool:
     text = " ".join([
@@ -185,6 +212,14 @@ def _mentions_people_content(data: dict) -> bool:
         " ".join(data.get("keywords") or []),
     ]).lower()
     return any(term in text for term in _PEOPLE_TEXT_BLOCKLIST)
+
+
+def _mentions_ground_facility_content(data: dict) -> bool:
+    text = " ".join([
+        data.get("title") or "", data.get("description") or "",
+        " ".join(data.get("keywords") or []),
+    ]).lower()
+    return any(term in text for term in _GROUND_FACILITY_TEXT_BLOCKLIST)
 
 
 # tolerancia CERO con personas (a petición explícita de Salva: "TODOS los
@@ -293,34 +328,16 @@ def _video_shows_people(video_path: str, n_samples: int = 14) -> bool:
     return hits >= _VIDEO_PEOPLE_MIN_HITS
 
 
-_NASA_QUERY_SYSTEM = """Eres un asistente que convierte la descripción de un tema musical
-en un término de búsqueda corto y efectivo en INGLÉS para la biblioteca de
-imágenes/vídeo de la NASA (images.nasa.gov). El término debe ser concreto
-(objeto astronómico + característica visual, ej. "Saturn rings Cassini",
-"Andromeda galaxy Hubble", "Jupiter Great Red Spot"), de 2 a 5 palabras,
-sin explicaciones.
-
-Importante sobre VÍDEO (no aplica a fotografía): el vídeo tiene que ser
-HD de verdad, y el vídeo genuinamente HD de la NASA es casi todo de
-misiones digitales modernas (Cassini, Juno, Perseverance/Curiosity, LRO,
-Hubble, JWST, cámaras de la ISS, SDO, Voyager reprocesado...) -- el
-material de archivo de antes de los 2000 (Apolo, transbordador clásico)
-casi nunca tiene una versión de vídeo en HD, por mucho que el propio
-suceso sea histórico. Así que, aunque el tema hable de algo de esa época,
-formula la búsqueda apuntando al objeto/lugar en sí (ej. "Moon surface"
-en vez de "Apollo Moon landing"), no a la misión histórica concreta -- así
-puede encontrar imagen MODERNA en alta resolución del mismo objeto.
-
-Responde ÚNICAMENTE con JSON: {"query": "..."}"""
-
 _NASA_QUERY_FALLBACK_SYSTEM = """Eres un asistente que ayuda a encontrar vídeo/imagen de la NASA en
 alta resolución. Una búsqueda anterior no dio ningún resultado válido en
 images.nasa.gov. Genera una alternativa MÁS AMPLIA/GENÉRICA en INGLÉS (2-4
 palabras) sobre el mismo tema, evitando el término exacto que ya falló --
 quita nombres de misión concretos o adjetivos muy específicos, quédate con
 el objeto astronómico en sí (ej. si "Apollo Moon surface close-up" no dio
-nada, prueba "Moon surface" o "Lunar surface NASA"). Responde ÚNICAMENTE
-con JSON: {"query": "..."}"""
+nada, prueba "Moon surface" o "Lunar surface NASA"). Nunca apuntes al
+lanzamiento/construcción/operación de una misión (ej. "rocket launch",
+"spacecraft assembly", "mission control") -- eso es ingeniería en Tierra,
+no imagen real del espacio. Responde ÚNICAMENTE con JSON: {"query": "..."}"""
 
 
 _NASA_QUERIES_SYSTEM = """Eres un asistente que convierte la descripción de un tema musical en
@@ -347,6 +364,18 @@ formula las búsquedas apuntando al objeto/lugar en sí (ej. "Moon surface"
 en vez de "Apollo Moon landing"), no a la misión histórica concreta -- así
 puede encontrar imagen MODERNA en alta resolución del mismo objeto.
 
+MUY IMPORTANTE, evitar SIEMPRE (aplica a fotografía y vídeo por igual):
+gran parte del catálogo de la NASA es material de ingeniería en TIERRA,
+no imagen real del espacio -- montaje/integración de la nave en sala
+blanca, pruebas de motores, fábricas, salas de control de la misión,
+ruedas de prensa. Nunca formules una búsqueda sobre el LANZAMIENTO, la
+CONSTRUCCIÓN o la OPERACIÓN de una misión (ej. NUNCA "rocket launch",
+"spacecraft assembly", "mission control", "engine test") -- apunta
+siempre al objeto astronómico observado o fotografiado DESDE el espacio,
+la órbita o un telescopio (ej. "Saturn rings", "Earth from orbit",
+"nebula deep field"), nunca a la infraestructura o a la gente de la NASA
+en la Tierra que hace posible la misión.
+
 Responde ÚNICAMENTE con JSON: {"queries": ["...", "...", "...", "...", "..."]}"""
 
 
@@ -366,21 +395,6 @@ def generate_nasa_queries(track_title: str, context: str, n: int = 5) -> list:
     result = call_claude_json(_NASA_QUERIES_SYSTEM, user, max_tokens=400, model="claude-sonnet-5")
     queries = result.get("queries") or []
     return queries or [track_title]
-
-
-def generate_nasa_query(track_title: str, context: str) -> str:
-    """
-    Convierte el título/contexto de un tema (en español, pensado para
-    humanos) en un término de búsqueda en inglés efectivo contra la
-    biblioteca de la NASA — la búsqueda de la NASA funciona mucho mejor
-    con términos concretos en inglés (ej. "Saturn rings Cassini") que
-    con frases largas o en español.
-    """
-    from src.anthropic_utils import call_claude_json
-
-    user = f"Título del tema: {track_title}\nContexto: {context}"
-    result = call_claude_json(_NASA_QUERY_SYSTEM, user, max_tokens=200, model="claude-sonnet-5")
-    return result.get("query", track_title)
 
 
 def generate_nasa_query_fallback(track_title: str, context: str, failed_query: str) -> str:
@@ -425,7 +439,7 @@ def search_nasa_images(
         data = item["data"][0]
         if data.get("copyright"):
             continue
-        if _mentions_people_content(data):
+        if _mentions_people_content(data) or _mentions_ground_facility_content(data):
             continue
 
         # el enlace "canonical" (~orig) es la máxima calidad disponible;
@@ -564,7 +578,7 @@ def search_nasa_videos(
         data = item["data"][0]
         if data.get("copyright"):
             continue
-        if _mentions_people_content(data):
+        if _mentions_people_content(data) or _mentions_ground_facility_content(data):
             continue
 
         try:
