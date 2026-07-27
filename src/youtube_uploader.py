@@ -161,6 +161,20 @@ def upload_video(
     return video_id
 
 
+def update_video_schedule(video_id: str, publish_at: str, channel: str = None):
+    """
+    Cambia la fecha/hora de publicación programada de un vídeo YA SUBIDO
+    (sigue privado hasta esa fecha) -- para adelantar/atrasar el
+    calendario de un LP que ya se subió a YouTube sin tener que volver a
+    subir nada. YouTube exige `privacyStatus: "private"` para poder fijar
+    `publishAt` (igual que en la subida inicial en upload_video)."""
+    youtube = _get_authenticated_service(channel)
+    youtube.videos().update(
+        part="status",
+        body={"id": video_id, "status": {"privacyStatus": "private", "publishAt": publish_at}},
+    ).execute()
+
+
 def update_video_description(video_id: str, description: str, channel: str = None):
     """
     Cambia la descripción de un vídeo ya subido, sin tocar el resto de
