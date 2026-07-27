@@ -183,6 +183,7 @@ def merge_schedules(old_schedule, new_schedule):
         if old_item.get("video_id") and old_item["publish_at_utc"] != new_item["publish_at_utc"]:
             changes.append({
                 "video_id": old_item["video_id"],
+                "video_path": new_item["video_path"],
                 "kind": new_item["kind"],
                 "track_number": new_item["track_number"],
                 "title": new_item["title"],
@@ -246,22 +247,62 @@ def main():
         return
 
     print(f"\n--apply activado: actualizando {len(changes)} elemento(s) ya subido(s) en YouTube...")
+    from src.lp_shorts_schedule import _is_quota_error  # noqa: E402
     from src.youtube_uploader import update_video_schedule  # noqa: E402
 
-    backup_path = old_path.with_suffix(".json.bak")
-    backup_path.write_text(old_path.read_text(encoding="utf-8"), encoding="utf-8")
-    print(f"Copia de seguridad del calendario anterior: {backup_path}")
+    backup_path = old_path.with_name(old_path.stem + ".json.bak")
+    if not backup_path.exists():
+        backup_path.write_text(old_path.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"Copia de seguridad del calendario anterior: {backup_path}")
+
+    # el calendario que se va guardando en disco empieza IGUAL que el
+    # viejo (las fechas que YouTube tiene de verdad ahora mismo) y solo se
+    # pisa la fecha de un elemento en el momento exacto en que su
+    # actualización en YouTube tiene éxito -- así, si la cuota diaria se
+    # agota a mitad (pasa con LPs grandes: cada actualización cuesta
+    # cuota igual que subir), el archivo guardado nunca "miente" diciendo
+    # que algo cambió cuando en realidad la llamada falló. Se guarda tras
+    # CADA elemento, no solo al final, por si el proceso se corta a mitad.
+    final_by_path = {item["video_path"]: item for item in old_schedule}
+    new_by_path = {item["video_path"]: item for item in new_schedule}
+
+    # los elementos SIN video_id todavía (no subidos) no tienen nada que
+    # aplicar en YouTube -- adoptan ya el calendario nuevo completo, se
+    # subirán con su fecha nueva en cuanto les toque.
+    final_schedule = [
+        new_by_path[path] if not item.get("video_id") else item
+        for path, item in final_by_path.items()
+    ]
+
+    def _save():
+        old_path.write_text(json.dumps(final_schedule, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    _save()
 
     done = 0
+    quota_hit = False
     for c in changes:
+        if quota_hit:
+            break
         try:
             update_video_schedule(c["video_id"], c["new_publish_at"], channel=args.channel)
-            done += 1
-            print(f"  OK: {c['kind']} tema {c['track_number']} ({c['video_id']}) -> {c['new_publish_at']}")
         except Exception as e:
+            if _is_quota_error(e):
+                print(f"\nLímite diario de YouTube alcanzado de verdad ({e}) — actualizados {done}/{len(changes)} por hoy.")
+                print("Vuelve a lanzar este mismo comando otro día para seguir con el resto (no se duplica ni se pierde nada).")
+                quota_hit = True
+                break
             print(f"  ERROR actualizando {c['video_id']}: {e}")
+            continue
 
-    old_path.write_text(json.dumps(new_schedule, ensure_ascii=False, indent=2), encoding="utf-8")
+        target = final_by_path[c["video_path"]]
+        new_item = new_by_path[c["video_path"]]
+        target["publish_at_utc"] = new_item["publish_at_utc"]
+        target["publish_at_local"] = new_item["publish_at_local"]
+        done += 1
+        print(f"  OK: {c['kind']} tema {c['track_number']} ({c['video_id']}) -> {c['new_publish_at']}")
+        _save()
+
     print(f"\n{done}/{len(changes)} elementos actualizados en YouTube. Calendario real actualizado: {old_path}")
 
 
