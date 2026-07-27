@@ -176,6 +176,12 @@ _PEOPLE_TEXT_BLOCKLIST = (
     "speaks about", "speaks with", "discusses", "answers questions",
     "classroom", "students visit", "media availability", "press availability",
     "podcast", "town hall meeting", "media interviews", "remote interviews",
+    # confirmado en vivo: una foto de grupo con varias personas de pie a
+    # cierta distancia (ej. una ceremonia en la rampa de lanzamiento) a
+    # veces no dispara el detector visual de caras (demasiado pequeñas/
+    # giradas), así que hace falta también este respaldo de texto.
+    "group portrait", "ceremony", "anniversary celebration", "renaming",
+    "family and friends", "pose for a photo", "posed for",
 )
 
 # confirmado en vivo (queja real de Salva: "el programa selecciona
@@ -220,6 +226,50 @@ def _mentions_ground_facility_content(data: dict) -> bool:
         " ".join(data.get("keywords") or []),
     ]).lower()
     return any(term in text for term in _GROUND_FACILITY_TEXT_BLOCKLIST)
+
+
+# a petición explícita de Salva ("EN LOS VIDEOS SOLO DEBEN APARECER
+# PLANETAS, ESPACIO, UNIVERSO, GALAXIAS, CONSTELACIONES... EL RESTO NO
+# NOS SIRVE"): en vez de seguir ampliando una lista de exclusión sin fin
+# (cada consulta nueva puede sacar una frase de ingeniería en Tierra que
+# no estaba prevista), se exige lo contrario -- que el título/descripción/
+# palabras clave mencionen EXPLÍCITAMENTE algo astronómico real. Un
+# candidato solo se acepta si pasa esto Y NINGUNO de los dos filtros de
+# exclusión de arriba (personas / instalaciones en Tierra) -- las tres
+# condiciones a la vez son mucho más difíciles de burlar que cualquiera
+# por separado.
+#
+# Coincidencia por PALABRA COMPLETA (\b), no subcadena: "mars" como
+# subcadena simple coincide dentro de "Marshall" (NASA Marshall Space
+# Flight Center, un centro de ingeniería de cohetes -- aparece
+# constantísimamente en vídeo de fábrica/ensamblaje) y lo dejaría pasar
+# por error. Verificado en vivo: con subcadena simple, "SLS Payload
+# Adapter Manufactured... at NASA Marshall" colaba por culpa de "mars"
+# dentro de "Marshall"; con coincidencia de palabra completa, no.
+_UNIVERSE_ALLOWLIST_TERMS = (
+    "planet", "planets", "planetary", "moon", "moons", "lunar",
+    "galaxy", "galaxies", "galactic", "nebula", "nebulae", "star", "stars",
+    "starfield", "constellation", "constellations", "universe", "cosmos",
+    "cosmic", "solar system", "asteroid", "asteroids", "comet", "comets",
+    "black hole", "supernova", "exoplanet", "exoplanets", "deep space",
+    "deep field", "interstellar", "milky way", "andromeda", "aurora",
+    "eclipse", "meteor", "meteors", "meteorite", "solar flare", "sunspot",
+    "corona", "orbit", "orbital", "mercury", "venus", "earth", "mars",
+    "jupiter", "saturn", "uranus", "neptune", "pluto", "hubble", "webb",
+    "jwst", "celestial", "astronomical", "astronomy", "night sky",
+    "sky survey",
+)
+_UNIVERSE_ALLOWLIST_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(t) for t in _UNIVERSE_ALLOWLIST_TERMS) + r")\b"
+)
+
+
+def _mentions_universe_content(data: dict) -> bool:
+    text = " ".join([
+        data.get("title") or "", data.get("description") or "",
+        " ".join(data.get("keywords") or []),
+    ]).lower()
+    return bool(_UNIVERSE_ALLOWLIST_PATTERN.search(text))
 
 
 # tolerancia CERO con personas (a petición explícita de Salva: "TODOS los
@@ -441,6 +491,8 @@ def search_nasa_images(
             continue
         if _mentions_people_content(data) or _mentions_ground_facility_content(data):
             continue
+        if not _mentions_universe_content(data):
+            continue
 
         # el enlace "canonical" (~orig) es la máxima calidad disponible;
         # si no viene marcado así, se coge el de mayor resolución.
@@ -579,6 +631,8 @@ def search_nasa_videos(
         if data.get("copyright"):
             continue
         if _mentions_people_content(data) or _mentions_ground_facility_content(data):
+            continue
+        if not _mentions_universe_content(data):
             continue
 
         try:
