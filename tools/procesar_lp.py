@@ -519,6 +519,14 @@ def _run_youtube_phase(
         required=False, must_be_file=True,
     )
     extra_links = st.ask("Enlaces extra para la descripción (redes, web...; Enter para ninguno)", required=False)
+    giveaway_text = st.ask(
+        "Bases de un sorteo/promoción (texto completo; se añade a la "
+        "descripción de TODOS los vídeos y Shorts, y además como "
+        "comentario en los vídeos principales — fijar un comentario a "
+        "mano en cientos de Shorts no es viable, ahí solo va en la "
+        "descripción; Enter para no usar ninguno)",
+        required=False,
+    )
     main_hora_raw = st.ask("Hora de publicación del vídeo principal de cada tema (hora de España, HH:MM)", "18:00")
     main_hh, main_mm = (int(x) for x in main_hora_raw.split(":"))
 
@@ -636,12 +644,14 @@ def _run_youtube_phase(
             "idioma": idioma,
             "track_positions": {str(k): v for k, v in track_positions.items()},
             "channel": channel,
+            "giveaway_text": giveaway_text,
         }, f, ensure_ascii=False, indent=2)
 
     upload_lp_schedule(
         schedule, save_path, thumbnails=thumbnails, playlist_id=playlist_id,
         shorts_playlist_id=shorts_playlist_id,
         youtube=youtube, link_block=link_block, idioma=idioma, track_positions=track_positions,
+        giveaway_text=giveaway_text or "",
         channel=channel,
     )
 

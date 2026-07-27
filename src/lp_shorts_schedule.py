@@ -264,6 +264,7 @@ def upload_lp_schedule(
     schedule, save_path, thumbnails=None, playlist_id=None, shorts_playlist_id=None,
     youtube=None, link_block: str = "", idioma: str = None, track_positions=None,
     daily_quota_budget: int = DEFAULT_DAILY_QUOTA_BUDGET, channel: str = None,
+    giveaway_text: str = "",
 ):
     """
     Sube (programada) cada elemento de `schedule`, guardando el progreso
@@ -272,7 +273,11 @@ def upload_lp_schedule(
     miniatura} — la MISMA miniatura del tema se reutiliza para su vídeo
     principal y todos sus Shorts. `channel`: a qué canal de YouTube subir,
     si el correo tiene varios detrás (ver `youtube_uploader._token_path_for`)
-    — None/"default" usa el canal de siempre.
+    — None/"default" usa el canal de siempre. `giveaway_text`: bloque de
+    texto (ej. bases de un sorteo) añadido a la DESCRIPCIÓN de TODOS los
+    elementos (vídeos y Shorts), pero al COMENTARIO solo de los vídeos
+    principales — fijar un comentario a mano en cientos de Shorts no es
+    viable, así que ahí se limita a la descripción.
 
     El orden de SUBIDA no afecta cuándo se publica de verdad cada vídeo
     (eso lo fija `publishAt`), así que se prioriza tener el álbum entero
@@ -306,7 +311,7 @@ def upload_lp_schedule(
     volver a llamarla (relanzando `continuar_subida_youtube.py`, a mano
     o vía la Tarea Programada) en días sucesivos hasta terminar.
     """
-    from src.youtube_uploader import upload_video, update_video_description
+    from src.youtube_uploader import upload_video, update_video_description, append_to_video_description
 
     thumbnails = thumbnails or {}
     track_positions = track_positions or {}
@@ -348,7 +353,7 @@ def upload_lp_schedule(
             video_id = upload_video(
                 video_path=item["video_path"],
                 title=item["title"],
-                description=item["description"] + link_block + extra_description,
+                description=item["description"] + link_block + giveaway_text + extra_description,
                 tags=item["tags_youtube"],
                 publish_at=item["publish_at_utc"],
                 thumbnail_path=thumbnail_path,
@@ -437,7 +442,7 @@ def upload_lp_schedule(
                 break
             next_id = main_video_id_by_track[sorted_tracks[i + 1]]
             full_description = (
-                main_item["description"] + link_block
+                main_item["description"] + link_block + giveaway_text
                 + f"\n\n▶ Sigue escuchando: https://youtu.be/{next_id}"
             )
             try:
@@ -467,9 +472,13 @@ def upload_lp_schedule(
             if item["kind"] == "short":
                 main_id = main_video_id_by_track.get(item["track_number"])
                 extra = f"\n\n🎧 Escucha el tema completo: https://youtu.be/{main_id}" if main_id else ""
+                comment_text = (extra + link_block).strip()
             else:
-                extra = ""
-            comment_text = (extra + link_block).strip()
+                # el sorteo va de comentario SOLO en los vídeos
+                # principales (fijar un comentario a mano en cientos de
+                # Shorts no es viable) -- ahí sí llevan la info, pero solo
+                # en la descripción (ver giveaway_text en la subida).
+                comment_text = (link_block + giveaway_text).strip()
             if not comment_text:
                 continue
             try:
@@ -484,7 +493,33 @@ def upload_lp_schedule(
             except Exception as e:
                 print(f"   Aviso: no se pudo publicar el comentario de {Path(item['video_path']).name} ({e}).")
 
-    # 5. Por si algún Short ya estaba subido de antes de que existiera su
+    # 5. Bases de un sorteo/promoción (si se indica `giveaway_text`): se
+    #    añaden a la descripción de TODOS los elementos YA SUBIDOS de
+    #    antes de que existiera esta función (los subidos a partir de
+    #    ahora ya la llevan desde el momento de subir, en el paso 1) --
+    #    funciona igual estén públicos o todavía privados/programados, la
+    #    descripción se puede editar siempre. Usa el mismo mecanismo de
+    #    marcador que enlaces_streaming (ver append_to_video_description)
+    #    para poder relanzar sin duplicar si cambia el texto del sorteo.
+    if giveaway_text and giveaway_text.strip():
+        giveaway_stripped = giveaway_text.strip()
+        giveaway_marker = giveaway_stripped.splitlines()[0]
+        for item in schedule:
+            if quota_used + COST_VIDEO_UPDATE > daily_quota_budget:
+                break
+            if not item.get("video_id") or item.get("giveaway_added"):
+                continue
+            try:
+                append_to_video_description(item["video_id"], giveaway_stripped, marker=giveaway_marker, channel=channel)
+                item["giveaway_added"] = True
+                quota_used += COST_VIDEO_UPDATE
+                save_lp_schedule(schedule, save_path)
+            except Exception as e:
+                if _is_quota_error(e):
+                    break
+                print(f"   Aviso: no se pudo añadir el sorteo a la descripción de {Path(item['video_path']).name} ({e}).")
+
+    # 6. Por si algún Short ya estaba subido de antes de que existiera su
     #    lista de reproducción (o de que se creara para este LP en
     #    concreto): se añaden ahora, cada uno una sola vez.
     if shorts_playlist_id:

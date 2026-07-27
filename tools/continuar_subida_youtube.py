@@ -79,6 +79,12 @@ def _process_lp(lp_dir: Path):
     if streaming_block and streaming_block not in link_block:
         link_block += f"\n\n{streaming_block}"
 
+    # bases de un sorteo/promoción (opcional): si config_subida_youtube.json
+    # tiene "giveaway_text", se añade a la descripción de todo (vídeos y
+    # Shorts) y al comentario de los vídeos principales -- ver el aviso en
+    # upload_lp_schedule sobre por qué no se comenta también en los Shorts.
+    giveaway_text = config.get("giveaway_text", "")
+
     # lista de reproducción de Shorts: si este LP se confirmó ANTES de que
     # existiera esta función, no tendrá una todavía -- se crea aquí, una
     # sola vez, en cuanto haya conexión a YouTube (no hace falta relanzar
@@ -120,7 +126,7 @@ def _process_lp(lp_dir: Path):
         shorts_playlist_id=shorts_playlist_id,
         youtube=youtube, link_block=link_block,
         idioma=config.get("idioma"), track_positions=track_positions,
-        channel=channel,
+        channel=channel, giveaway_text=giveaway_text,
     )
 
 
