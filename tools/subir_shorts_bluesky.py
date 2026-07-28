@@ -80,6 +80,7 @@ def _process_lp(lp_dir: Path, handle: str, app_password: str):
     publish_due_bluesky_items(
         schedule, bluesky_schedule_path, handle, app_password,
         giveaway_text=config.get("giveaway_text", ""),
+        youtube_schedule_path=youtube_schedule_path,
     )
 
 

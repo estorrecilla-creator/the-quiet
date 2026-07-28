@@ -84,6 +84,45 @@ def _video_duration(path: str) -> float:
     return float(out.stdout.strip())
 
 
+def _main_video_link_by_track(youtube_schedule_path) -> dict:
+    """
+    Lee el calendario de YouTube (en vivo, no el que se guardó al crear
+    este calendario de Instagram) y devuelve, por número de tema, el
+    enlace a su vídeo principal YA subido -- así el Reel siempre enlaza
+    con la versión más reciente de ese dato, aunque el vídeo principal
+    todavía no estuviera subido cuando se generó calendario_instagram.json.
+    """
+    if not youtube_schedule_path or not Path(youtube_schedule_path).exists():
+        return {}
+    with open(youtube_schedule_path, encoding="utf-8") as f:
+        youtube_schedule = json.load(f)
+    return {
+        it["track_number"]: f"https://youtu.be/{it['video_id']}"
+        for it in youtube_schedule
+        if it["kind"] == "main" and it.get("video_id")
+    }
+
+
+def _compose_caption(caption_base: str, giveaway_text: str, youtube_link: str, max_length: int) -> str:
+    """
+    Compone el pie de foto priorizando que el enlace al vídeo completo en
+    YouTube SIEMPRE quepa entero (es el motivo principal de publicar
+    también aquí) -- si hace falta recortar algo para caber en el
+    límite, se recorta la descripción/sorteo, nunca el enlace.
+    """
+    body = caption_base
+    if giveaway_text and giveaway_text.strip():
+        body = f"{body}\n\n{giveaway_text.strip()}"
+
+    if not youtube_link:
+        return body[:max_length]
+
+    link_line = f"🎧 Escucha el tema completo: {youtube_link}"
+    room_for_body = max_length - len(link_line) - 2  # 2 = "\n\n"
+    body = body[:max(room_for_body, 0)]
+    return f"{body}\n\n{link_line}" if body else link_line
+
+
 def _is_rate_limit_error(exc) -> bool:
     """
     Detecta si Meta ha rechazado la publicación por límite de peticiones
@@ -105,7 +144,7 @@ def _is_rate_limit_error(exc) -> bool:
 
 def publish_due_instagram_items(
     schedule, save_path, ig_user_id: str, access_token: str,
-    giveaway_text: str = "", max_publishes: int = 10,
+    giveaway_text: str = "", youtube_schedule_path=None, max_publishes: int = 10,
 ):
     """
     Publica como Reel cada elemento de `schedule` cuya fecha programada
@@ -119,9 +158,17 @@ def publish_due_instagram_items(
     que se añaden al pie de foto -- como aquí no hay "subida" previa que
     ya quedara fijada, se añade siempre en el momento de publicar (nunca
     queda desactualizado para lo que todavía no se ha publicado).
+
+    `youtube_schedule_path`: ruta a calendario_youtube.json de este mismo
+    LP -- si se indica, cada Reel enlaza con el vídeo completo de su tema
+    en YouTube ("Escucha el tema completo"), igual que ya hacen los
+    Shorts de YouTube entre sí. Si el vídeo principal de ese tema todavía
+    no está subido, se publica sin enlace esta vez (no bloquea nada).
     """
     from src.cloud_storage import upload_public_temp, delete_public_temp
     from src.meta_uploader import publish_instagram_video
+
+    main_links = _main_video_link_by_track(youtube_schedule_path)
 
     due = [
         item for item in schedule
@@ -149,10 +196,10 @@ def publish_due_instagram_items(
             save_instagram_schedule(schedule, save_path)
             continue
 
-        caption = item["caption_base"]
-        if giveaway_text and giveaway_text.strip():
-            caption = f"{caption}\n\n{giveaway_text.strip()}"
-        caption = caption[:MAX_CAPTION_LENGTH]
+        caption = _compose_caption(
+            item["caption_base"], giveaway_text,
+            main_links.get(item["track_number"]), MAX_CAPTION_LENGTH,
+        )
 
         print(f"\n-> Publicando en Instagram {Path(video_path).name} (programado para {item['publish_at_local']})...")
         public_url, key = upload_public_temp(video_path)

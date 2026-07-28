@@ -86,6 +86,46 @@ def _probe_video_info(path: str):
     return duration, stream.get("width"), stream.get("height")
 
 
+def _main_video_link_by_track(youtube_schedule_path) -> dict:
+    """
+    Lee el calendario de YouTube (en vivo, no el que se guardó al crear
+    este calendario de Bluesky) y devuelve, por número de tema, el
+    enlace a su vídeo principal YA subido -- así el post siempre enlaza
+    con la versión más reciente de ese dato, aunque el vídeo principal
+    todavía no estuviera subido cuando se generó calendario_bluesky.json.
+    """
+    if not youtube_schedule_path or not Path(youtube_schedule_path).exists():
+        return {}
+    with open(youtube_schedule_path, encoding="utf-8") as f:
+        youtube_schedule = json.load(f)
+    return {
+        it["track_number"]: f"https://youtu.be/{it['video_id']}"
+        for it in youtube_schedule
+        if it["kind"] == "main" and it.get("video_id")
+    }
+
+
+def _compose_text(caption_base: str, giveaway_text: str, youtube_link: str, max_length: int) -> str:
+    """
+    Compone el texto priorizando que el enlace al vídeo completo en
+    YouTube SIEMPRE quepa entero (es el motivo principal de publicar
+    también aquí) -- con solo 300 caracteres de margen en Bluesky, si
+    hace falta recortar algo para caber, se recorta la descripción/
+    sorteo, nunca el enlace.
+    """
+    body = caption_base
+    if giveaway_text and giveaway_text.strip():
+        body = f"{body}\n\n{giveaway_text.strip()}"
+
+    if not youtube_link:
+        return body[:max_length]
+
+    link_line = f"🎧 Tema completo: {youtube_link}"
+    room_for_body = max_length - len(link_line) - 2  # 2 = "\n\n"
+    body = body[:max(room_for_body, 0)]
+    return f"{body}\n\n{link_line}" if body else link_line
+
+
 def _is_rate_limit_error(exc) -> bool:
     """
     Bluesky devuelve HTTP 429 cuando se supera el límite de peticiones --
@@ -102,7 +142,7 @@ def _is_rate_limit_error(exc) -> bool:
 
 def publish_due_bluesky_items(
     schedule, save_path, handle: str, app_password: str,
-    giveaway_text: str = "", max_publishes: int = 10,
+    giveaway_text: str = "", youtube_schedule_path=None, max_publishes: int = 10,
 ):
     """
     Publica cada elemento de `schedule` cuya fecha programada ya haya
@@ -111,8 +151,15 @@ def publish_due_bluesky_items(
     duplicar nada. `giveaway_text`: igual que en Instagram, se añade al
     texto en el momento de publicar (nunca queda desactualizado para lo
     que todavía no se ha publicado).
+
+    `youtube_schedule_path`: ruta a calendario_youtube.json de este mismo
+    LP -- si se indica, cada post enlaza con el vídeo completo de su tema
+    en YouTube. Si el vídeo principal de ese tema todavía no está subido,
+    se publica sin enlace esta vez (no bloquea nada).
     """
     from src.bluesky_uploader import publish_video_post
+
+    main_links = _main_video_link_by_track(youtube_schedule_path)
 
     due = [
         item for item in schedule
@@ -142,10 +189,10 @@ def publish_due_bluesky_items(
             save_bluesky_schedule(schedule, save_path)
             continue
 
-        text = item["caption_base"]
-        if giveaway_text and giveaway_text.strip():
-            text = f"{text}\n\n{giveaway_text.strip()}"
-        text = text[:MAX_TEXT_LENGTH]
+        text = _compose_text(
+            item["caption_base"], giveaway_text,
+            main_links.get(item["track_number"]), MAX_TEXT_LENGTH,
+        )
 
         aspect_ratio = {"width": width, "height": height} if width and height else None
 

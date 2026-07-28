@@ -79,6 +79,7 @@ def _process_lp(lp_dir: Path, ig_user_id: str, access_token: str):
     publish_due_instagram_items(
         schedule, instagram_schedule_path, ig_user_id, access_token,
         giveaway_text=config.get("giveaway_text", ""),
+        youtube_schedule_path=youtube_schedule_path,
     )
 
 
