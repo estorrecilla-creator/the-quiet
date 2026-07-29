@@ -65,11 +65,16 @@ def _process_lp(lp_dir: Path, ig_user_id: str, access_token: str):
     youtube_schedule_path = lp_dir / "calendario_youtube.json"
     instagram_schedule_path = lp_dir / "calendario_instagram.json"
 
-    if instagram_schedule_path.exists():
-        schedule = load_instagram_schedule(instagram_schedule_path)
-    else:
-        schedule = build_instagram_schedule_from_youtube(youtube_schedule_path)
-        save_instagram_schedule(schedule, instagram_schedule_path)
+    existed_before = instagram_schedule_path.exists()
+    existing_schedule = load_instagram_schedule(instagram_schedule_path) if existed_before else None
+    # se recalcula en CADA ejecución (no solo la primera vez) para que, si
+    # el LP se reprograma más adelante (tools/reprogramar_lp.py), este
+    # calendario recoja las fechas nuevas de lo que aún no se ha
+    # publicado -- lo ya publicado se conserva tal cual, ver el docstring
+    # de build_instagram_schedule_from_youtube.
+    schedule = build_instagram_schedule_from_youtube(youtube_schedule_path, existing_schedule=existing_schedule)
+    save_instagram_schedule(schedule, instagram_schedule_path)
+    if not existed_before:
         print(
             f"-> Calendario de Instagram creado ({len(schedule)} Shorts) en "
             f"{instagram_schedule_path.relative_to(REPO_ROOT)}"

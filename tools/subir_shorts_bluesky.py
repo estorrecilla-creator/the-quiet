@@ -66,11 +66,16 @@ def _process_lp(lp_dir: Path, handle: str, app_password: str):
     youtube_schedule_path = lp_dir / "calendario_youtube.json"
     bluesky_schedule_path = lp_dir / "calendario_bluesky.json"
 
-    if bluesky_schedule_path.exists():
-        schedule = load_bluesky_schedule(bluesky_schedule_path)
-    else:
-        schedule = build_bluesky_schedule_from_youtube(youtube_schedule_path)
-        save_bluesky_schedule(schedule, bluesky_schedule_path)
+    existed_before = bluesky_schedule_path.exists()
+    existing_schedule = load_bluesky_schedule(bluesky_schedule_path) if existed_before else None
+    # se recalcula en CADA ejecución (no solo la primera vez) para que, si
+    # el LP se reprograma más adelante (tools/reprogramar_lp.py), este
+    # calendario recoja las fechas nuevas de lo que aún no se ha
+    # publicado -- lo ya publicado se conserva tal cual, ver el docstring
+    # de build_bluesky_schedule_from_youtube.
+    schedule = build_bluesky_schedule_from_youtube(youtube_schedule_path, existing_schedule=existing_schedule)
+    save_bluesky_schedule(schedule, bluesky_schedule_path)
+    if not existed_before:
         print(
             f"-> Calendario de Bluesky creado ({len(schedule)} Shorts) en "
             f"{bluesky_schedule_path.relative_to(REPO_ROOT)}"

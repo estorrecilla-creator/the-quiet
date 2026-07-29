@@ -30,23 +30,38 @@ MIN_REEL_SECONDS = 5
 MAX_REEL_SECONDS = 90
 
 
-def build_instagram_schedule_from_youtube(youtube_schedule_path) -> list:
+_CARRY_OVER_FIELDS = ("published", "instagram_media_id", "skipped_reason")
+
+
+def build_instagram_schedule_from_youtube(youtube_schedule_path, existing_schedule=None) -> list:
     """
-    Crea el calendario de Instagram a partir del de YouTube ya calculado
+    Crea (o actualiza) el calendario de Instagram a partir del de YouTube
     -- mismas fechas, mismo orden, solo los Shorts (los vídeos
     principales no caben en el límite de 90s de Reels). El texto final
     del pie de foto (con el sorteo si lo hay) se completa al publicar,
     no aquí, para poder añadir bases de un sorteo aunque se hayan escrito
     después de crear este calendario.
+
+    Está pensada para llamarse en CADA ejecución, no solo la primera vez
+    -- si se pasa `existing_schedule` (el calendario de Instagram ya
+    guardado), cada elemento YA publicado (o descartado por no cumplir
+    los requisitos de Reels) conserva su estado tal cual, emparejando por
+    `video_path` (identificador estable). Los elementos todavía NO
+    publicados, en cambio, siempre adoptan la fecha/descripción más
+    reciente de YouTube -- así, si el LP se reprograma más adelante
+    (tools/reprogramar_lp.py), este calendario se pone al día solo, sin
+    perder ni duplicar lo que ya se hubiera publicado.
     """
     with open(youtube_schedule_path, encoding="utf-8") as f:
         youtube_schedule = json.load(f)
+
+    existing_by_path = {item["video_path"]: item for item in (existing_schedule or [])}
 
     schedule = []
     for item in youtube_schedule:
         if item["kind"] != "short":
             continue
-        schedule.append({
+        entry = {
             "track_number": item["track_number"],
             "video_path": item["video_path"],
             "caption_base": item["description"],
@@ -54,7 +69,11 @@ def build_instagram_schedule_from_youtube(youtube_schedule_path) -> list:
             "publish_at_local": item["publish_at_local"],
             "instagram_media_id": None,
             "published": False,
-        })
+        }
+        old = existing_by_path.get(item["video_path"])
+        if old and old.get("published"):
+            entry.update({k: old[k] for k in _CARRY_OVER_FIELDS if k in old})
+        schedule.append(entry)
     return schedule
 
 
