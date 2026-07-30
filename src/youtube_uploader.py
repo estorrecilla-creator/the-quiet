@@ -192,6 +192,34 @@ def update_video_description(video_id: str, description: str, channel: str = Non
     youtube.videos().update(part="snippet", body={"id": video_id, "snippet": snippet}).execute()
 
 
+def update_video_metadata(
+    video_id: str, title: str = None, description: str = None, tags: list = None, channel: str = None,
+):
+    """
+    Cambia título/descripción/etiquetas de un vídeo ya subido (cualquier
+    combinación de los tres, según qué parámetros se pasen) -- útil para
+    un vídeo TODAVÍA PRIVADO (programado, esperando su publishAt) al que
+    se le quieren renovar los metadatos antes de que se haga público de
+    verdad, sin tener que volver a subirlo. Como en update_video_description,
+    YouTube exige mandar el "snippet" completo en cada actualización, así
+    que primero se lee el snippet actual y solo se sustituyen los campos
+    indicados.
+    """
+    youtube = _get_authenticated_service(channel)
+    current = youtube.videos().list(part="snippet", id=video_id).execute()
+    items = current.get("items", [])
+    if not items:
+        return
+    snippet = items[0]["snippet"]
+    if title is not None:
+        snippet["title"] = title
+    if description is not None:
+        snippet["description"] = description
+    if tags is not None:
+        snippet["tags"] = tags
+    youtube.videos().update(part="snippet", body={"id": video_id, "snippet": snippet}).execute()
+
+
 def append_to_video_description(video_id: str, extra_text: str, marker: str = None, channel: str = None):
     """
     Añade `extra_text` al FINAL de la descripción actual de un vídeo ya
