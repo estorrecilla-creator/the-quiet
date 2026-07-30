@@ -46,6 +46,17 @@ GENRE = (
 MAX_POOL_SIZE = 30  # tope razonable de variantes pedidas de una vez por tema
 
 
+def _is_low_credit_error(exc) -> bool:
+    """
+    Saldo de la API de Anthropic agotado (tema de facturación de la
+    cuenta, nada que ver con la cuota diaria de YouTube) -- se detecta
+    para dar un aviso claro en vez de un traceback, ya que es un fallo
+    fácil de solucionar (añadir crédito) y que puede repetirse.
+    """
+    import anthropic
+    return isinstance(exc, anthropic.BadRequestError) and "credit balance" in str(exc).lower()
+
+
 def _track_titles(lp_calendar_path: Path) -> dict:
     lp_calendar = json.loads(lp_calendar_path.read_text(encoding="utf-8"))
     titles = {}
@@ -114,7 +125,17 @@ def main():
 
         n = min(len(items), MAX_POOL_SIZE)
         print(f"-> Tema {track_number} ({track_title}): pidiendo {n} variantes nuevas para {len(items)} Shorts afectados...")
-        pool = generate_short_metadata_pool(ARTIST, track_title, GENRE, context, n=n)
+        try:
+            pool = generate_short_metadata_pool(ARTIST, track_title, GENRE, context, n=n)
+        except Exception as e:
+            if _is_low_credit_error(e):
+                print(f"\nSaldo de la API de Anthropic agotado ({e}).")
+                print(
+                    "Añade crédito en https://console.anthropic.com/settings/billing y vuelve a "
+                    "lanzar este mismo comando -- no se ha tocado nada todavía en este tema."
+                )
+                return
+            raise
 
         for i, item in enumerate(items):
             if quota_hit:
