@@ -32,6 +32,17 @@ MODEL = "claude-sonnet-5"
 _CACHE = None
 _SHORT_POOL_INDEX = {}
 
+# Pool generado EN DIRECTO (sin caché de archivo) para Shorts -- se pide
+# de una sola vez por tema (barato) en vez de una llamada por Short
+# (caro), igual que la caché de archivo, pero sin necesitar preparar
+# nada a mano. Ver generate_short_metadata_pool(): fuerza que título,
+# descripción Y HASHTAGS varíen de verdad entre Shorts del mismo tema --
+# publicar el mismo puñado de hashtags en decenas de vídeos seguidos hace
+# que YouTube lo trate como contenido repetitivo y reduce el alcance.
+_LIVE_POOL = {}
+_LIVE_POOL_INDEX = {}
+DEFAULT_SHORT_POOL_SIZE = 12
+
 
 def load_metadata_cache(path: str) -> None:
     global _CACHE, _SHORT_POOL_INDEX
@@ -77,11 +88,9 @@ Devuelve un JSON con esta forma exacta:
 
 # El vídeo largo se beneficia de una descripción extensa (SEO: cuanto más
 # contexto real, mejor entiende YouTube de qué trata) con la palabra clave
-# principal (título/artista) en la primera frase. El Short se lee poco y
-# se ve mayoritariamente en el feed de deslizar, así que se queda corto y
-# directo — pero desde enero de 2026 los Shorts tienen su propio filtro de
-# búsqueda en YouTube, así que el título debe incluir una frase de
-# búsqueda real, no solo un gancho.
+# principal (título/artista) en la primera frase. Los Shorts usan su propio
+# prompt (SHORT_POOL_USER_TEMPLATE, más abajo) que además fuerza variedad
+# real entre Shorts del mismo tema -- no comparten estos hints.
 _HINTS = {
     "main": {
         "title": "La palabra clave principal (título del tema o artista) cerca del principio.",
@@ -92,17 +101,74 @@ _HINTS = {
             "termina con una llamada a la acción clara."
         ),
     },
-    "short": {
-        "title": (
-            "Incluye tanto un gancho como una frase de búsqueda real (YouTube tiene un filtro de "
-            "búsqueda propio para Shorts desde 2026, no basta con un gancho genérico)."
-        ),
-        "description": (
-            "3-5 líneas. La palabra clave principal (título del tema) en la PRIMERA frase, "
-            "contexto artístico breve y una llamada a la acción."
-        ),
-    },
 }
+
+
+SHORT_POOL_USER_TEMPLATE = """Genera {n} variantes DISTINTAS de metadatos de YouTube
+para Shorts del mismo tema musical (todas parten del mismo tema/género/contexto,
+pero se van a publicar como Shorts distintos a lo largo de varias semanas -- no
+pueden sonar como la misma publicación reescrita).
+
+Artista: {artist}
+Título del tema: {track_title}
+Género/estilo: {genre}
+Contexto/concepto del álbum o tema: {context}
+
+Reglas de variación (importante, esto es justo lo que se pide):
+- Título y descripción: cada variante debe tener un ángulo o gancho distinto
+  (una línea de la letra, una imagen del tema, una pregunta, un dato...), no
+  sinónimos de la misma frase.
+- Hashtags: cada variante lleva 3-5 hashtags, pero NO uses siempre el mismo
+  conjunto en todas las variantes -- mantén como máximo 1-2 hashtags fijos de
+  marca (nombre del artista y/o álbum) y varía el resto entre distintas
+  etiquetas reales de género/temática/estado de ánimo relevantes para esta
+  pieza (ej: subgéneros, adjetivos de atmósfera, "#shorts" cuando aplique,
+  etc.) -- publicar el mismo puñado de hashtags en decenas de vídeos seguidos
+  hace que YouTube lo trate como contenido repetitivo y reduce el alcance.
+- tags_youtube: igual, varía las palabras clave sueltas entre variantes en vez
+  de repetir la misma lista.
+
+Devuelve un JSON con esta forma exacta:
+{{
+  "variants": [
+    {{
+      "title": "string, máx 100 caracteres, con gancho + frase de búsqueda real",
+      "description": "string, 3-5 líneas, palabra clave principal en la primera frase",
+      "hashtags": ["#etiqueta1", "#etiqueta2", "3-5 hashtags MÁXIMO, variados entre variantes"],
+      "tags_youtube": ["palabra clave 1", "... 10-15 tags sueltas, variadas entre variantes"]
+    }}
+  ]
+}}
+La lista "variants" debe tener exactamente {n} elementos.
+"""
+
+
+def generate_short_metadata_pool(artist, track_title, genre, context, n=DEFAULT_SHORT_POOL_SIZE):
+    """
+    Pide de una sola vez (barato) un conjunto de `n` variantes de
+    título/descripción/hashtags/tags para los Shorts de un mismo tema,
+    forzando que varíen de verdad entre sí -- en particular los hashtags,
+    que si no se piden explícitamente tienden a converger siempre en el
+    mismo puñado "obviamente correcto" (nombre de artista/álbum/género),
+    aunque se llame a la API por separado para cada Short.
+    """
+    user_prompt = SHORT_POOL_USER_TEMPLATE.format(
+        n=n, artist=artist, track_title=track_title, genre=genre, context=context,
+    )
+    result = call_claude_json(
+        SYSTEM_PROMPT, user_prompt, max_tokens=400 * n, model=MODEL,
+    )
+    return result["variants"]
+
+
+def _live_pool_metadata(artist, track_title, genre, context):
+    pool = _LIVE_POOL.get(track_title)
+    if pool is None:
+        pool = generate_short_metadata_pool(artist, track_title, genre, context)
+        _LIVE_POOL[track_title] = pool
+    idx = _LIVE_POOL_INDEX.get(track_title, 0)
+    _LIVE_POOL_INDEX[track_title] = idx + 1
+    return pool[idx % len(pool)]
 
 
 def generate_metadata(artist, track_title, genre, context, content_type="main"):
@@ -110,12 +176,17 @@ def generate_metadata(artist, track_title, genre, context, content_type="main"):
     if cached is not None:
         return cached
 
-    content_type_label = (
-        "Vídeo largo de YouTube (tema completo o LP)"
-        if content_type == "main"
-        else "YouTube Short (15-60s, fragmento del tema)"
-    )
-    hints = _HINTS["main"] if content_type == "main" else _HINTS["short"]
+    if content_type == "short":
+        # un Short suelto reutiliza el mismo tema/género/contexto que
+        # todos los demás Shorts de su tema, así que en vez de una
+        # llamada independiente por cada uno (que además tiende a
+        # converger siempre en los mismos hashtags "obvios"), se pide un
+        # pool de variantes de una sola vez y se van repartiendo -- ver
+        # generate_short_metadata_pool().
+        return _live_pool_metadata(artist, track_title, genre, context)
+
+    content_type_label = "Vídeo largo de YouTube (tema completo o LP)"
+    hints = _HINTS["main"]
 
     user_prompt = USER_TEMPLATE.format(
         artist=artist,
@@ -129,7 +200,7 @@ def generate_metadata(artist, track_title, genre, context, content_type="main"):
 
     return call_claude_json(
         SYSTEM_PROMPT, user_prompt,
-        max_tokens=1800 if content_type == "main" else 1000,
+        max_tokens=1800,
         model=MODEL,
     )
 
