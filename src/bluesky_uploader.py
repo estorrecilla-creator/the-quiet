@@ -57,14 +57,18 @@ def _upload_video_blob(access_jwt: str, video_path: str):
 
 def publish_video_post(
     handle: str, app_password: str, video_path: str, text: str,
-    aspect_ratio: dict = None,
+    aspect_ratio: dict = None, facets: list = None,
 ):
     """
     Publica `video_path` como una publicación de Bluesky con `text` como
     texto del post. `aspect_ratio`: {"width":.., "height":..} opcional --
     evita que un vídeo vertical salga con bandas negras en algunos
-    clientes; si no se sabe, mejor omitirlo que adivinarlo. Devuelve el
-    "uri" de la publicación creada.
+    clientes; si no se sabe, mejor omitirlo que adivinarlo. `facets`:
+    lista de enlaces "de verdad" dentro del texto (Bluesky no admite
+    markdown tipo [texto](url) -- un facet marca un tramo del propio
+    `text`, por posición en BYTES de su codificación UTF-8, y lo
+    convierte en un enlace clicable a otra URL sin cambiar lo que se ve
+    escrito). Devuelve el "uri" de la publicación creada.
     """
     access_jwt, did = _create_session(handle, app_password)
     blob = _upload_video_blob(access_jwt, video_path)
@@ -79,6 +83,8 @@ def publish_video_post(
         "createdAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         "embed": embed,
     }
+    if facets:
+        record["facets"] = facets
     resp = requests.post(
         f"{API_BASE}/com.atproto.repo.createRecord",
         headers={"Authorization": f"Bearer {access_jwt}"},

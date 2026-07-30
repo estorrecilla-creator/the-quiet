@@ -124,25 +124,44 @@ def _main_video_link_by_track(youtube_schedule_path) -> dict:
     }
 
 
-def _compose_text(caption_base: str, giveaway_text: str, youtube_link: str, max_length: int) -> str:
+LINK_LABEL = "🎧 Escucha el tema completo"
+
+
+def _compose_text(caption_base: str, giveaway_text: str, youtube_link: str, max_length: int):
     """
     Compone el texto priorizando que el enlace al vídeo completo en
     YouTube SIEMPRE quepa entero (es el motivo principal de publicar
     también aquí) -- con solo 300 caracteres de margen en Bluesky, si
     hace falta recortar algo para caber, se recorta la descripción/
     sorteo, nunca el enlace.
+
+    Bluesky no admite markdown ([texto](url)): el texto es siempre plano,
+    y un enlace "de verdad" (con texto propio en vez de la URL en crudo)
+    se consigue con un "facet" -- un tramo del propio texto, marcado por
+    posición en BYTES de su codificación UTF-8 (no por caracteres), que
+    se convierte en clicable hacia otra URL. Por eso aquí se devuelve
+    (texto, facets) en vez de un único string.
     """
     body = caption_base
     if giveaway_text and giveaway_text.strip():
         body = f"{body}\n\n{giveaway_text.strip()}"
 
     if not youtube_link:
-        return body[:max_length]
+        return body[:max_length], []
 
-    link_line = f"🎧 Tema completo: {youtube_link}"
-    room_for_body = max_length - len(link_line) - 2  # 2 = "\n\n"
+    room_for_body = max_length - len(LINK_LABEL) - 2  # 2 = "\n\n"
     body = body[:max(room_for_body, 0)]
-    return f"{body}\n\n{link_line}" if body else link_line
+    text = f"{body}\n\n{LINK_LABEL}" if body else LINK_LABEL
+
+    text_bytes = text.encode("utf-8")
+    label_bytes = LINK_LABEL.encode("utf-8")
+    byte_start = len(text_bytes) - len(label_bytes)
+    byte_end = len(text_bytes)
+    facets = [{
+        "index": {"byteStart": byte_start, "byteEnd": byte_end},
+        "features": [{"$type": "app.bsky.richtext.facet#link", "uri": youtube_link}],
+    }]
+    return text, facets
 
 
 def _is_rate_limit_error(exc) -> bool:
@@ -208,7 +227,7 @@ def publish_due_bluesky_items(
             save_bluesky_schedule(schedule, save_path)
             continue
 
-        text = _compose_text(
+        text, facets = _compose_text(
             item["caption_base"], giveaway_text,
             main_links.get(item["track_number"]), MAX_TEXT_LENGTH,
         )
@@ -217,7 +236,7 @@ def publish_due_bluesky_items(
 
         print(f"\n-> Publicando en Bluesky {Path(video_path).name} (programado para {item['publish_at_local']})...")
         try:
-            uri = publish_video_post(handle, app_password, video_path, text, aspect_ratio=aspect_ratio)
+            uri = publish_video_post(handle, app_password, video_path, text, aspect_ratio=aspect_ratio, facets=facets)
         except Exception as e:
             if _is_rate_limit_error(e):
                 print(f"   Límite de peticiones de Bluesky alcanzado por hoy ({e}) -- paro aquí.")
