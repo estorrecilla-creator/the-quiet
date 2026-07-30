@@ -3,6 +3,7 @@ venv/
 config/client_secret.json
 config/token.json
 config/asistente_memoria.json
+config/tiktok_token.json
 output/
 uploads/
 MUSICA/
