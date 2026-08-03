@@ -241,10 +241,17 @@ def burn_subtitles(video_path: str, srt_path: str, out_path: str):
 
 def build_album_audio(audio_dir: str, out_path: str, work_dir: Path):
     """Concatena, en orden por nombre de archivo, todos los .wav de
-    `audio_dir` (el álbum completo) en una sola pista continua."""
+    `audio_dir` (el álbum completo) en una sola pista continua -- salvo
+    el Tema 1 ("01 - ..."), que se mueve al final del todo en vez de ir
+    primero (decisión de Salva: no abrir la banda sonora con él)."""
     tracks = sorted(Path(audio_dir).glob("*.wav"))
     if not tracks:
         raise RuntimeError(f"No encuentro ningún .wav en {audio_dir}")
+
+    track_1 = next((t for t in tracks if t.name.startswith("01 ")), None)
+    if track_1:
+        tracks = [t for t in tracks if t != track_1] + [track_1]
+
     list_path = work_dir / "audio_concat_list.txt"
     with open(list_path, "w", encoding="utf-8") as f:
         for t in tracks:
