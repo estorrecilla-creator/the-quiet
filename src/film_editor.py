@@ -109,29 +109,52 @@ def _is_closeup(frame_path: str, min_face_area_fraction: float = 0.12) -> bool:
     return frame_has_prominent_face(img, min_face_area_fraction=min_face_area_fraction)
 
 
-def _has_motion(film_path: str, start: float, end: float, min_diff: float = 4.0) -> bool:
-    """Heurístico: compara dos fotogramas dentro del plano (al 20% y al
-    80% de su duración) — si apenas cambian, es un plano estático (p.ej.
-    un cartel de texto/intertítulo de cine mudo), no imagen real en
-    movimiento. Si no se puede comprobar, se asume que sí tiene
-    movimiento (no se descarta un plano válido por error de sonda)."""
+def _has_motion(film_path: str, start: float, end: float, min_diff: float = 6.0, n_samples: int = 5) -> bool:
+    """Heurístico: compara varios fotogramas repartidos a lo largo del
+    plano (no solo dos) para decidir si es un plano estático (p.ej. un
+    cartel de texto/intertítulo de cine mudo) o tiene movimiento real.
+
+    Se difumina cada fotograma (Gaussian blur) antes de comparar y se usa
+    la MEDIANA de las diferencias entre fotogramas consecutivos, en vez
+    de la media de un único par -- en una película de archivo escaneada,
+    el grano/parpadeo propio de la cinta puede hacer que un cartel de
+    texto realmente estático parezca "tener movimiento" si solo se mira
+    un par de fotogramas sin filtrar ruido; con varias muestras y
+    difuminado, ese ruido de grano queda muy por debajo del umbral
+    mientras que el movimiento real (una persona moviéndose, la cámara
+    paneando) lo sigue superando con claridad.
+
+    Si no se puede comprobar, se asume que sí tiene movimiento (no se
+    descarta un plano válido por error de sonda)."""
     dur = end - start
-    t1 = start + dur * 0.2
-    t2 = start + dur * 0.8
+    fractions = [0.1 + 0.8 * i / (n_samples - 1) for i in range(n_samples)]
+    timestamps = [start + dur * f for f in fractions]
+
     with tempfile.TemporaryDirectory() as tmp:
-        f1 = str(Path(tmp) / "a.jpg")
-        f2 = str(Path(tmp) / "b.jpg")
-        subprocess.run(["ffmpeg", "-y", "-ss", str(t1), "-i", film_path, "-frames:v", "1", f1], capture_output=True)
-        subprocess.run(["ffmpeg", "-y", "-ss", str(t2), "-i", film_path, "-frames:v", "1", f2], capture_output=True)
-        if not Path(f1).exists() or not Path(f2).exists():
+        frame_paths = []
+        for i, t in enumerate(timestamps):
+            fp = str(Path(tmp) / f"f{i}.jpg")
+            subprocess.run(["ffmpeg", "-y", "-ss", str(t), "-i", film_path, "-frames:v", "1", fp], capture_output=True)
+            if Path(fp).exists():
+                frame_paths.append(fp)
+
+        if len(frame_paths) < 2:
             return True
+
         try:
-            from PIL import Image
-            img1 = np.array(Image.open(f1).convert("L"), dtype=np.float32)
-            img2 = np.array(Image.open(f2).convert("L"), dtype=np.float32)
-            if img1.shape != img2.shape:
+            from PIL import Image, ImageFilter
+            imgs = []
+            for fp in frame_paths:
+                img = Image.open(fp).convert("L").filter(ImageFilter.GaussianBlur(radius=2))
+                imgs.append(np.array(img, dtype=np.float32))
+            base_shape = imgs[0].shape
+            if any(im.shape != base_shape for im in imgs):
                 return True
-            return float(np.abs(img1 - img2).mean()) >= min_diff
+            diffs = sorted(
+                float(np.abs(imgs[i] - imgs[i - 1]).mean()) for i in range(1, len(imgs))
+            )
+            median_diff = diffs[len(diffs) // 2]
+            return median_diff >= min_diff
         except Exception:
             return True
 
