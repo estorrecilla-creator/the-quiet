@@ -118,13 +118,18 @@ Reglas de variación (importante, esto es justo lo que se pide):
 - Título y descripción: cada variante debe tener un ángulo o gancho distinto
   (una línea de la letra, una imagen del tema, una pregunta, un dato...), no
   sinónimos de la misma frase.
-- Hashtags: cada variante lleva 3-5 hashtags, pero NO uses siempre el mismo
-  conjunto en todas las variantes -- mantén como máximo 1-2 hashtags fijos de
-  marca (nombre del artista y/o álbum) y varía el resto entre distintas
-  etiquetas reales de género/temática/estado de ánimo relevantes para esta
-  pieza (ej: subgéneros, adjetivos de atmósfera, "#shorts" cuando aplique,
-  etc.) -- publicar el mismo puñado de hashtags en decenas de vídeos seguidos
-  hace que YouTube lo trate como contenido repetitivo y reduce el alcance.
+- Título: además del gancho y la frase de búsqueda, termina SIEMPRE con
+  1-2 hashtags pegados al final (ej. "...#shorts #progrock") -- ayuda al
+  descubrimiento en el feed de Shorts. Mantén "#shorts" fijo si encaja, pero
+  varía el segundo hashtag del título entre variantes (no el mismo siempre).
+- Hashtags: cada variante lleva 3-5 hashtags (para el campo de hashtags, no
+  el título), pero NO uses siempre el mismo conjunto en todas las variantes
+  -- mantén como máximo 1-2 hashtags fijos de marca (nombre del artista y/o
+  álbum) y varía el resto entre distintas etiquetas reales de género/
+  temática/estado de ánimo relevantes para esta pieza (ej: subgéneros,
+  adjetivos de atmósfera, "#shorts" cuando aplique, etc.) -- publicar el
+  mismo puñado de hashtags en decenas de vídeos seguidos hace que YouTube lo
+  trate como contenido repetitivo y reduce el alcance.
 - tags_youtube: igual, varía las palabras clave sueltas entre variantes en vez
   de repetir la misma lista.
 
@@ -132,7 +137,7 @@ Devuelve un JSON con esta forma exacta:
 {{
   "variants": [
     {{
-      "title": "string, máx 100 caracteres, con gancho + frase de búsqueda real",
+      "title": "string, máx 100 caracteres, gancho + frase de búsqueda real + 1-2 hashtags al final",
       "description": "string, 3-5 líneas, palabra clave principal en la primera frase",
       "hashtags": ["#etiqueta1", "#etiqueta2", "3-5 hashtags MÁXIMO, variados entre variantes"],
       "tags_youtube": ["palabra clave 1", "... 10-15 tags sueltas, variadas entre variantes"]
