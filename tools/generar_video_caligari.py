@@ -153,6 +153,15 @@ def build_timeline(film_path: str, lang: str, cap_real: float, work_dir: Path):
     real_clip_paths = []
     caption_events = []
     cumulative_time = 0.0
+    # `cumulative_time` solo avanza con los planos reales (es la posición
+    # real en el vídeo final); `caption_cursor` es la próxima vez que hay
+    # hueco libre para un subtítulo. Cuando dos o más planos de texto van
+    # seguidos en la película original (sin ningún plano real entre
+    # medias), sus subtítulos deben ponerse EN FILA uno detrás de otro,
+    # no todos empezando en el mismo `cumulative_time` -- ese era el bug:
+    # dejaba caption_cursor sin actualizar entre planos de texto
+    # consecutivos, así que se amontonaban todos en el mismo instante.
+    caption_cursor = 0.0
     text_slot = 0
 
     for i, scene in enumerate(tagged):
@@ -162,11 +171,12 @@ def build_timeline(film_path: str, lang: str, cap_real: float, work_dir: Path):
             phrases = []
             for beat in beats:
                 phrases.extend(_split_into_phrases(beat[lang]))
-            t = cumulative_time
+            t = max(cumulative_time, caption_cursor)
             for phrase in phrases:
                 dur = _phrase_duration(phrase)
                 caption_events.append((t, t + dur, phrase))
                 t += dur
+            caption_cursor = t
         else:
             out_path = str(work_dir / f"clip_{i:04d}_real.mp4")
             dur = _extract_real_clip(film_path, scene["start"], scene["end"], cap_real, out_path)
