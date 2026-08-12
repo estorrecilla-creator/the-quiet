@@ -33,6 +33,7 @@ if not os.environ.get("ANTHROPIC_API_KEY"):
 from main import process_track
 from src.image_prompts import generate_image_prompts
 from src.image_generator import generate_cover_images
+from src.metadata_generator import load_metadata_cache
 
 MEMORY_PATH = Path("config") / "asistente_memoria.json"
 AUDIO_EXTENSIONS = (".mp3", ".wav")
@@ -504,6 +505,18 @@ def main():
     cover, shorts_cover_override, film_path = _resolve_cover_interactive(artist, title, genre, context, audio)
     film_edit = _prepare_film_edit(film_path) if film_path else None
     shorts = int(ask("Número de Shorts a generar", "3"))
+
+    metadata_cache_path = ask_path(
+        "Ruta a un archivo de metadatos pre-generados (título/descripción/"
+        "hashtags/etiquetas ya escritos, para no gastar API en ellos; Enter "
+        "para generarlos en directo con la API como siempre)",
+        required=False,
+    )
+    if metadata_cache_path:
+        load_metadata_cache(metadata_cache_path)
+        print(f"-> Metadatos pre-generados cargados desde {metadata_cache_path} "
+              "(se usan cuando hay una entrada para el tema; si falta alguno, "
+              "se genera en directo con la API como respaldo).")
     lyrics = ask_path(
         "Ruta a la letra (.srt ya sincronizado, o .txt en texto plano para "
         "sincronizar automáticamente; opcional, Enter para omitir)",
