@@ -311,6 +311,10 @@ def _match_cover_mode(raw, have_stock, have_openai):
 
     if text.startswith("t") or "tengo" in text or "imagen" in text:
         return "t"
+    if (
+        text.startswith("p") or "elícula" in text or "elicula" in text or "film" in text
+    ):
+        return "p"
     if have_stock and (
         text.startswith("v") or "video" in text or "vídeo" in text
         or "stock" in text or "libre" in text
@@ -322,6 +326,27 @@ def _match_cover_mode(raw, have_stock, have_openai):
     ):
         return "g"
     return None
+
+
+def _prepare_film_edit(film_path):
+    """
+    Analiza la película UNA vez (planos + tipo de plano, cacheado junto al
+    archivo: <película>.scenes.json / <película>.scenetypes.v2.json) y
+    devuelve el dict `film_edit` que espera `process_track()` para montar
+    el vídeo principal y los Shorts con cortes reales de esa película en
+    vez de una portada fija — con la duración de cada corte ajustada a la
+    energía del audio en cada momento (más energía, cortes más rápidos).
+    """
+    from src.film_editor import detect_scenes, tag_scene_types
+    print(
+        "-> Analizando la película (detectando cambios de plano y "
+        "clasificándolos; se cachea junto al archivo, así que solo tarda "
+        "la primera vez)..."
+    )
+    scenes = detect_scenes(film_path)
+    tagged = tag_scene_types(film_path, scenes)
+    print(f"   {len(tagged)} planos detectados.")
+    return {"film_path": film_path, "tagged_scenes": tagged, "exclude_ranges": set()}
 
 
 def _resolve_cover_interactive(artist, title, genre, context, audio_path):
@@ -342,9 +367,9 @@ def _resolve_cover_interactive(artist, title, genre, context, audio_path):
             "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
             "(cada una tendrá su propio movimiento de cámara)"
         )
-        return cover, None
+        return cover, None, None
 
-    opciones = ["[t]engo las imágenes"]
+    opciones = ["[t]engo las imágenes", "[p]elícula real (dominio público)"]
     if have_stock:
         opciones.append("[v]ídeo libre de derechos")
     if have_openai:
@@ -353,8 +378,10 @@ def _resolve_cover_interactive(artist, title, genre, context, audio_path):
 
     while True:
         raw = ask(
-            "¿Ya tienes las imágenes de portada, quieres que busque vídeo libre "
-            f"de derechos, o que las genere con IA? {' / '.join(opciones)}",
+            "¿Ya tienes las imágenes de portada, quieres montar el vídeo con "
+            "cortes reales de una película de dominio público que ya tengas "
+            "descargada, que busque vídeo libre de derechos, o que las genere "
+            f"con IA? {' / '.join(opciones)}",
             default_modo,
         )
         modo = _match_cover_mode(raw, have_stock, have_openai)
@@ -367,7 +394,14 @@ def _resolve_cover_interactive(artist, title, genre, context, audio_path):
             "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
             "(cada una tendrá su propio movimiento de cámara)"
         )
-        return cover, None
+        return cover, None, None
+
+    if modo == "p":
+        film_path = ask_path(
+            "Ruta al archivo de vídeo de la película (mp4/mov/mkv...)",
+            must_be_file=True,
+        )
+        return None, None, film_path
 
     if modo == "v":
         suggested_n = _suggest_clip_count(audio_path)
@@ -386,13 +420,13 @@ def _resolve_cover_interactive(artist, title, genre, context, audio_path):
                 "Ruta a la portada (jpg/png), o a una carpeta con varias imágenes "
                 "(cada una tendrá su propio movimiento de cámara)"
             )
-            return cover, None
+            return cover, None, None
 
         print("-> Buscando también una portada vertical propia para los Shorts...")
         shorts_cover = _resolve_stock_video_covers(
             artist, title, genre, context, 1, have_openai, orientation="portrait"
         )
-        return cover, shorts_cover
+        return cover, shorts_cover, None
 
     n_images = int(ask(
         "¿Cuántas imágenes generamos? (cada una tendrá su propio movimiento "
@@ -407,7 +441,7 @@ def _resolve_cover_interactive(artist, title, genre, context, audio_path):
     print(f"-> Generando {n_images} imágenes con IA (puede tardar un minuto)...")
     generate_cover_images(prompts, str(cover_dir))
     print(f"   Imágenes guardadas en: {cover_dir}")
-    return str(cover_dir), None
+    return str(cover_dir), None, None
 
 
 def main():
@@ -467,7 +501,8 @@ def main():
     })
     _save_memory(memory)
 
-    cover, shorts_cover_override = _resolve_cover_interactive(artist, title, genre, context, audio)
+    cover, shorts_cover_override, film_path = _resolve_cover_interactive(artist, title, genre, context, audio)
+    film_edit = _prepare_film_edit(film_path) if film_path else None
     shorts = int(ask("Número de Shorts a generar", "3"))
     lyrics = ask_path(
         "Ruta a la letra (.srt ya sincronizado, o .txt en texto plano para "
@@ -494,6 +529,7 @@ def main():
         shorts_cover_override=shorts_cover_override,
         watermark_logo_light_path=watermark_logo_light,
         watermark_logo_dark_path=watermark_logo_dark,
+        film_edit=film_edit,
     )
     print(f"\nListo. Revisa la carpeta: {out_dir}")
 
