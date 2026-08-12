@@ -17,12 +17,18 @@ Uso:
 
     ... --publish-now
     ... --publish-date 2026-08-14 --publish-time 18:00
+
+    Publicar 1 Short al día: el primero ya (público, ahora mismo) y el
+    resto en días sucesivos a partir de mañana, siempre a la misma hora:
+    python tools/subir_shorts_tema.py "output/The_Signature" \
+        --metadata config/metadata_the_signature.json --title "The Signature" \
+        --channel reichskonkordat --daily --daily-time 19:00
 """
 
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -54,8 +60,14 @@ def main():
     parser.add_argument("--publish-now", action="store_true", help="Subir directamente como público, en vez de privado para revisar antes")
     parser.add_argument("--publish-date", default=None, help="Fecha de publicación programada (misma para todos), hora de España (ej. 2026-08-14)")
     parser.add_argument("--publish-time", default="18:00", help="Hora de publicación programada, hora de España (por defecto 18:00)")
+    parser.add_argument("--daily", action="store_true", help="El primer Short se publica ya (público, ahora mismo); el resto se programan uno por día en días sucesivos a partir de mañana, siempre a --daily-time")
+    parser.add_argument("--daily-time", default="19:00", help="Hora de publicación diaria, hora de España (por defecto 19:00), solo con --daily")
     parser.add_argument("--channel", default=None, help="Canal de YouTube a usar, si hace falta (ver src/youtube_uploader._token_path_for)")
     args = parser.parse_args()
+
+    if args.daily and (args.publish_now or args.publish_date):
+        print("--daily no se puede combinar con --publish-now/--publish-date -- elige uno de los dos modos.")
+        sys.exit(1)
 
     shorts_dir = Path(args.shorts_dir)
     if not shorts_dir.is_dir():
@@ -93,21 +105,46 @@ def main():
     privacy_status = "public" if args.publish_now else "private"
     print(f"-> {len(shorts)} Shorts encontrados, {len(variants)} variantes de metadatos disponibles.")
 
+    today = datetime.now(ZoneInfo("Europe/Madrid")).date()
+
     for i, short_path in enumerate(shorts):
         meta = variants[i % len(variants)]
-        print(f"\n[{i + 1}/{len(shorts)}] {short_path.name}")
+        this_privacy = privacy_status
+        this_publish_at = publish_at
+        note = ""
+        if args.daily:
+            if i == 0:
+                this_privacy = "public"
+                this_publish_at = None
+                note = " (ya, público)"
+            else:
+                target_date = today + timedelta(days=i)
+                local_dt = datetime.strptime(
+                    f"{target_date} {args.daily_time}", "%Y-%m-%d %H:%M"
+                ).replace(tzinfo=ZoneInfo("Europe/Madrid"))
+                this_publish_at = local_dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")
+                this_privacy = "private"
+                note = f" (programado {target_date} {args.daily_time} hora de España)"
+
+        print(f"\n[{i + 1}/{len(shorts)}] {short_path.name}{note}")
         print(f"   Título: {meta['title']}")
         video_id = upload_video(
             video_path=str(short_path),
             title=meta["title"],
             description=_build_description(meta),
             tags=meta.get("tags_youtube", []),
-            privacy_status=privacy_status,
-            publish_at=publish_at,
+            privacy_status=this_privacy,
+            publish_at=this_publish_at,
             default_language=args.language,
             channel=args.channel,
         )
         print(f"   Subido: https://youtube.com/watch?v={video_id}")
+
+    if args.daily:
+        print(f"\nListo -- {len(shorts)} Shorts subidos: el primero ya público, "
+              f"el resto programados 1 al día a las {args.daily_time} (hora de España) "
+              "a partir de mañana.")
+        return
 
     print(f"\nListo -- {len(shorts)} Shorts subidos como {privacy_status}"
           + (f", programados para el {args.publish_date} a las {args.publish_time} (hora de España)." if publish_at else "."))
