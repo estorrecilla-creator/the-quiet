@@ -517,11 +517,17 @@ def main():
         print(f"-> Metadatos pre-generados cargados desde {metadata_cache_path} "
               "(se usan cuando hay una entrada para el tema; si falta alguno, "
               "se genera en directo con la API como respaldo).")
-    lyrics = ask_path(
-        "Ruta a la letra (.srt ya sincronizado, o .txt en texto plano para "
-        "sincronizar automáticamente; opcional, Enter para omitir)",
-        required=False,
-    )
+    while True:
+        lyrics = ask_path(
+            "Ruta a la letra (.srt ya sincronizado, o .txt en texto plano para "
+            "sincronizar automáticamente; opcional, Enter para omitir)",
+            required=False,
+            must_be_file=True,
+        )
+        if not lyrics or lyrics.lower().endswith((".srt", ".txt")):
+            break
+        print(f"  Ese archivo no es .srt ni .txt: {lyrics}")
+
     lyrics_offset = 0.0
     if lyrics:
         offset_raw = ask(
